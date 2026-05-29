@@ -604,11 +604,12 @@ rao_by_cluster = dat_locations %>%
 
 # Calculate Moran's I per location
 library(spdep)
+head(rao_by_cluster)
 morans_by_location = rao_by_cluster %>%
   group_by(location) %>%
   group_modify(~ {
     coords <- as.matrix(.x[, c("long", "lat")])
-    nb     <- knn2nb(knearneigh(coords, k = 4))
+    nb     <- knn2nb(knearneigh(coords, k = 6))
     lw     <- nb2listw(nb, style = "W")
     mi     <- moran.test(.x$rao, lw)
     tibble(moran_i = mi$estimate[["Moran I statistic"]])
@@ -1551,7 +1552,7 @@ sth = read.csv(file = here("data/bangl/parasites/untouched", "bangl_analysis_par
   dplyr::select(-block) %>%
   mutate(pathogen = replace(pathogen, pathogen == "al", "Ascaris")) %>%
   mutate(pathogen = replace(pathogen, pathogen == "tt", "Trichuris")) %>%
-  mutate(pathogen = replace(pathogen, pathogen == "hw", "Hookworm"))
+  mutate(pathogen = replace(pathogen, pathogen == "hw", "Hookworm")) 
 head(sth)
 
 bangl_targeting_cluster = rbind(bangl_targeting_cluster , sth)
@@ -1700,6 +1701,9 @@ prevalence_check_cam = cambodia_serology_public %>%
 head(prevalence_check_cam) 
 print(unique(prevalence_check_cam$antigen))
 print(unique(prevalence_check_cam$pathogen))
+
+cam_antigen = prevalence_check_cam %>%
+  distinct(pathogen, pop_seropos)
 
 # Targeting groups by individual
 # make sure to use two antigen positvity defintion for LF
@@ -2198,8 +2202,9 @@ ggplot(data = to_label) +
   xlab("Spatial autocorrelation (Moran's I)") +
   ylab("Proportion of clusters to reach 80% coverage")
 
-fig2b_build = ggplot(data = to_label) +
-  geom_point(aes(x = moran_i, y = prop_clusters), color = "gray23", alpha = .6, cex = 3)+
+fig2b_build = ggplot(data = to_label %>%
+                       mutate(location = factor(location, levels = c("Bangladesh", "Kenya", "Cambodia")))) +
+  geom_point(aes(x = moran_i, y = prop_clusters), color = "gray23", alpha = .6, cex = 4)+
   # facet_wrap(vars(location), scales = "free_x") +
   scale_color_viridis_d(option = "D", end = 0.9) +
   facet_wrap(vars(location), scales ="free_x") +
@@ -2410,7 +2415,7 @@ pathogen_order = clusters_80 %>%
 
 clusters_80 = left_join(clusters_80, pathogen_order, by = c("location", "pathogen"))
 
-fig2c_build  = ggplot(clusters_80, aes(x = reorder(pathogen, rao_rank), y = prop_clusters_80, fill = strategy)) +
+fig2c_build  = ggplot(clusters_80 %>%  mutate(location = factor(location, levels = c("Bangladesh", "Kenya", "Cambodia"))), aes(x = reorder(pathogen, rao_rank), y = prop_clusters_80, fill = strategy)) +
   geom_point(aes(fill = strategy), cex = 4, shape = 24) +
   #facet_wrap(vars(location, combo), scales = "free_x", labeller = label_wrap_gen(width = 40)) +
  # facet_wrap(vars(location, combo), scales = "free_x", 
@@ -2694,7 +2699,7 @@ rao_mpi = left_join(mpi_all_locations, rao_by_cluster, by = c("location", "spati
   mutate(mpi_standard = mpi/max_mpi)
 head(rao_mpi)
 
-fig3a_build = ggplot(data = rao_mpi) +
+fig3a_build = ggplot(data = rao_mpi %>%  mutate(location = factor(location, levels = c("Bangladesh", "Kenya", "Cambodia")))) +
   geom_point(aes(x = mpi_standard, y = rao), col = "gray20", cex = 3, alpha = .8) +
   facet_wrap(vars(location)) +
   geom_smooth(aes(x = mpi_standard, y = rao), 
@@ -2712,6 +2717,7 @@ fig3a_build = ggplot(data = rao_mpi) +
         strip.background = element_rect(fill = "white", colour = "black"),
         plot.title = element_text(size = 14))  + scale_x_continuous(n.breaks = 4) +
   theme(panel.spacing = unit(0.5, "cm"))
+fig3a_build
 
 fig3a <- fig3a_build +
   labs(tag = "A") +
@@ -2981,3 +2987,234 @@ fig3b
 
 fig3 = plot_grid(fig3a,fig3b, ncol =1, rel_heights = c(.7, .6))
 fig3
+
+
+################################################### may 18 
+
+head(rao_by_cluster)
+# make real maps 
+kenya_map_rao <- ggplot(
+  data = rao_by_cluster  %>% filter(location == "Kenya")) +
+  geom_sf(data = admin_k_study,
+          fill  = alpha("seagreen", 0.06),
+          color = alpha("black", 0.30),
+          lwd   = 0.50) +
+  geom_point(aes(x = long, y = lat, color = rao), cex = 5, alpha = .86 ) + #, shape = 24) +  #shape = 24) +
+  theme_minimal() +
+  xlim(c(xmin_k, xmax_k)) +
+  ylim(c(ymin_k, ymax_k)) +
+  theme(legend.position = "bottom") +
+  ggtitle("Kenya") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title    = element_text(size = 20),
+    plot.subtitle = element_text(size = 20),
+    plot.tag      = element_text(face = "bold", size = 20),
+    legend.text   = element_text(size = 18),
+    legend.title  = element_text(size = 20),
+    axis.title    = element_blank(),
+    axis.text     = element_blank(),
+    axis.ticks    = element_blank() )
+kenya_map_rao
+
+bangl_map_rao = ggplot(rao_by_cluster  %>% filter(location == "Bangladesh")) +
+  geom_sf(data = admin_b_study, fill = alpha("seagreen", .06),  color = alpha("black", 0.30), lwd = .50) +
+  geom_point(aes(x = long, y = lat, color = rao), cex = 5, alpha = .86) +theme_minimal() +
+  ylab("Latitude") + xlab("Longitude") +
+  xlim(c(89.9, 90.8)) +
+  ylim(c(23.9, 25.0))  +
+  theme(legend.position = "bottom") +
+  ggtitle("Bangladesh") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title      = element_text(size = 20), 
+    plot.subtitle =   element_text(size = 20), 
+    plot.tag         = element_text(face = "bold", size = 20),
+    legend.text = element_text(size = 18), legend.title = element_text(size = 20)) + 
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    axis.ticks = element_blank())
+bangl_map_rao
+
+plot_grid(kenya_map_rao, bangl_map_rao, nrow = 1)
+
+
+# Load country-level boundaries for the world
+countries <- ne_countries(scale = "medium", returnclass = "sf")
+# Filter for Cambodia
+cambodia_map <- countries[countries$name == "Cambodia", ]
+
+# First administrative boundaries (provinces)
+cambodia_admin1 <- ne_states(
+  country = "Cambodia",
+  returnclass = "sf")
+
+# second admin 
+library(geodata)
+library(sf)
+
+# Download Cambodia admin2 boundaries
+khm_admin2 <- geodata::gadm(
+  country = "KHM",
+  level = 2,
+  path = tempdir()
+)
+
+# Convert to sf
+khm_admin2_sf <- st_as_sf(khm_admin2)
+
+cam_map_rao <- ggplot(data = rao_by_cluster  %>% filter(location == "Cambodia") ) + 
+ # geom_sf(data = cambodia_map, fill =  alpha("seagreen", .06), color = alpha("black", 0.30), lwd = .50) +
+  geom_point(aes(x = long, y = lat, color = rao), cex = 5, alpha = .86) +theme_minimal() +
+ # geom_sf(data = cambodia_admin1,
+   #  fill =  alpha("seagreen", .06),
+   # color = alpha("black", 0.35),
+  #  linewidth = 0.35) +
+  geom_sf(
+    data = khm_admin2_sf,
+    fill =  alpha("seagreen", .06),
+    color = alpha("black", 0.25),
+    linewidth = 0.2) +
+  ylab("Latitude") + xlab("Longitude") +
+  ggtitle("Cambodia") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title      = element_text(size = 23), 
+    plot.subtitle =   element_text(size = 20), 
+    plot.tag         = element_text(face = "bold", size = 20),
+    legend.text = element_text(size = 18), legend.title = element_text(size = 20), 
+    legend.position = "none") + 
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    axis.ticks = element_blank())
+cam_map_rao 
+  
+plot_grid(kenya_map_rao, bangl_map_rao, cam_map_rao, nrow = 1)
+  
+  
+ 
+
+
+##################################### plot study sites 
+
+# make real maps 
+kenya_sites <- ggplot(
+  data = rao_by_cluster  %>% filter(location == "Kenya")) +
+  geom_sf(data = admin_k_study,
+          fill  = alpha("seagreen", 0.06),
+          color = alpha("black", 0.30),
+          lwd   = 0.50) +
+  geom_point(aes(x = long, y = lat),fill = "black", cex = 4, alpha = .80, shape = 24 ) + #, shape = 24) +  #shape = 24) +
+  theme_minimal() +
+  xlim(c(xmin_k, xmax_k)) +
+  ylim(c(ymin_k, ymax_k)) +
+  theme(legend.position = "bottom") +
+  ggtitle("Kenya") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_fill_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title    = element_text(size = 20),
+    plot.subtitle = element_text(size = 20),
+    plot.tag      = element_text(face = "bold", size = 20),
+    legend.text   = element_text(size = 18),
+    legend.title  = element_text(size = 20),
+    axis.title    = element_blank(),
+    axis.text     = element_blank(),
+    axis.ticks    = element_blank() )
+kenya_sites
+
+bangl_sites = ggplot(rao_by_cluster  %>% filter(location == "Bangladesh")) +
+  geom_sf(data = admin_b_study, fill = alpha("seagreen", .06),  color = alpha("black", 0.30), lwd = .50) +
+  geom_point(aes(x = long, y = lat), fill = "black", cex = 4, alpha = .86, shape = 24) +theme_minimal() +
+  ylab("Latitude") + xlab("Longitude") +
+  xlim(c(89.9, 90.8)) +
+  ylim(c(23.9, 25.0))  +
+  theme(legend.position = "bottom") +
+  ggtitle("Bangladesh") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title      = element_text(size = 20), 
+    plot.subtitle =   element_text(size = 20), 
+    plot.tag         = element_text(face = "bold", size = 20),
+    legend.text = element_text(size = 18), legend.title = element_text(size = 20)) + 
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    axis.ticks = element_blank())
+bangl_sites
+
+plot_grid(bangl_sites, kenya_sites, nrow = 1)
+
+
+# Load country-level boundaries for the world
+countries <- ne_countries(scale = "medium", returnclass = "sf")
+# Filter for Cambodia
+cambodia_map <- countries[countries$name == "Cambodia", ]
+
+# First administrative boundaries (provinces)
+cambodia_admin1 <- ne_states(
+  country = "Cambodia",
+  returnclass = "sf")
+
+# second admin 
+library(geodata)
+library(sf)
+
+# Download Cambodia admin2 boundaries
+khm_admin2 <- geodata::gadm(
+  country = "KHM",
+  level = 2,
+  path = tempdir()
+)
+
+# Convert to sf
+khm_admin2_sf <- st_as_sf(khm_admin2)
+
+cam_sites <- ggplot(data = rao_by_cluster  %>% filter(location == "Cambodia") ) + 
+  # geom_sf(data = cambodia_map, fill =  alpha("seagreen", .06), color = alpha("black", 0.30), lwd = .50) +
+  geom_point(aes(x = long, y = lat), fill = "black", cex = 4, alpha = .86, shape = 24) +theme_minimal() +
+  # geom_sf(data = cambodia_admin1,
+  #  fill =  alpha("seagreen", .06),
+  # color = alpha("black", 0.35),
+  #  linewidth = 0.35) +
+  geom_sf(
+    data = khm_admin2_sf,
+    fill =  alpha("seagreen", .06),
+    color = alpha("black", 0.25),
+    linewidth = 0.2) +
+  ylab("Latitude") + xlab("Longitude") +
+  ggtitle("Cambodia") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title      = element_text(size = 23), 
+    plot.subtitle =   element_text(size = 20), 
+    plot.tag         = element_text(face = "bold", size = 20),
+    legend.text = element_text(size = 18), legend.title = element_text(size = 20), 
+    legend.position = "none") + 
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    axis.ticks = element_blank())
+cam_sites
+
+plot_grid(kenya_sites, bangl_sites, cam_sites, nrow = 1)
+
