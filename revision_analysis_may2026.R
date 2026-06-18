@@ -1948,6 +1948,11 @@ fig1a <- fig1a_build +
 fig1a
 
 
+fig1a <- fig1a_build +
+  labs(tag = "B") +
+  theme(plot.tag = element_text(size = 20, face = "bold"))
+fig1a
+
 
 #################################### Map out all Rao surfaces 
 # Bangl 
@@ -4568,7 +4573,8 @@ fig3a_build = ggplot(data = rao_mpi %>%  mutate(location = factor(location, leve
               method = "glm",
               formula = y ~ x,
               method.args = list(family = gaussian(link = "log")),
-              se = TRUE, color = "darkmagenta") +
+              se = TRUE, color = "orangered") + 
+              #color = "darkmagenta") +
   theme_bw(base_size = 11) +
   theme(strip.text      = element_text(size = 20),
         axis.text       = element_text(size = 18),
@@ -6250,7 +6256,7 @@ fig1a_build = results_all %>%
     y     = "Proportion of clusters to reach 80% coverage" ) + # to\nreac
   theme_bw(base_size = 11) +
   # theme_minimal() +
-  theme(legend.position = "right",
+  theme(legend.position = "botttom",
         axis.text.x = element_text(angle = 30, hjust = 1)) +
   coord_cartesian(ylim = c(0.55, .86)) +
   scale_fill_viridis_d(option = "D" , end = .7 , name = "Strategy", alpha = .66) +
@@ -6263,7 +6269,7 @@ fig1a_build = results_all %>%
     axis.title.x = element_text(size = 14), 
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14), 
-    legend.position = "right")  +
+    legend.position = "bottom")  +
   theme(strip.text = element_text(size = 16, colour = "black"),
         strip.background = element_rect(fill = "white", colour = "black"),
         plot.title = element_text(size = 14))
@@ -6275,7 +6281,10 @@ fig1a <- fig1a_build +
 fig1a
 
 
-
+fig1a <- fig1a_build +
+  labs(tag = "B") +
+  theme(plot.tag = element_text(size = 20, face = "bold"))
+fig1a
 
 ###################################################
 # FIG 1B #########################################
@@ -6580,7 +6589,7 @@ plot_location <- function(loc, nc) {
   cumulative_pathogen_curves_v2 %>%
     filter(location == loc) %>%
     ggplot() +
-    geom_line(aes(x = frac_clusters, y = cum_fraction,linetype = strategy), lwd = 1.25) +
+    geom_line(aes(x = frac_clusters, y = cum_fraction,linetype = strategy), lwd = 1) +
     facet_wrap(vars(pathogen), ncol = nc) +
     geom_hline(yintercept = .80, col = "gray70", lty = "dashed") +
     theme_bw(base_size = 11) +
@@ -6613,7 +6622,7 @@ plot_location <- function(loc, nc) {
   cumulative_pathogen_curves_v2 %>%
     filter(location == loc) %>%
     ggplot() +
-    geom_line(aes(x = frac_clusters, y = cum_fraction, linetype = strategy), lwd = 1.25) +
+    geom_line(aes(x = frac_clusters, y = cum_fraction, linetype = strategy), lwd = 1) +
     facet_wrap(vars(pathogen), ncol = nc) +
     geom_hline(yintercept = .80, col = "gray70", lty = "dashed") +
     theme_bw(base_size = 11) +
@@ -6640,10 +6649,10 @@ p_cambodia   <- plot_location("Cambodia",   nc = 3)
 # Stack with patchwork + legend
 fig1b_build <- (p_bangladesh / p_kenya / p_cambodia) / 
  # wrap_elements(shared_legend) +
-  plot_layout(heights = c(2, 1, 1, 0.3))
+  plot_layout(heights = c(1, 1, 1, 0.3))
 
 fig1b = fig1b_build + 
-  labs(tag = "B", y = "Cumulative disease targeted") +
+  labs(tag = "A", y = "Cumulative disease targeted") +
   theme(plot.tag = element_text(size = 20, face = "bold"),
         plot.tag.position = c(0, 2.8), 
         axis.title.y      = element_text(size = 13, vjust = 9, angle = 90, 
@@ -6653,7 +6662,7 @@ fig1b
 
 # Build final patchwork without y label
 fig1b_no_label = fig1b_build + 
-  labs(tag = "B") +
+  labs(tag = "A") +
   theme(plot.tag          = element_text(size = 20, face = "bold"),
         plot.tag.position = c(0, 2.8),
         axis.title.y      = element_blank(),
@@ -6661,6 +6670,29 @@ fig1b_no_label = fig1b_build +
 
 # Add a global y axis label using cowplot
 fig1b_final <- ggdraw(fig1b_no_label) +
+  draw_label("Cumulative disease targeted", 
+             x = 0.01,          # horizontal position (0 = far left)
+             y = 0.5,           # vertical position (0.5 = middle)
+             angle = 90,        # rotate to vertical
+             size = 15,
+             fontface = "plain")
+
+fig1b_final
+
+# sorrt rebuild 
+# Build final patchwork without y label
+fig1b_no_label = fig1b_build + 
+  labs(tag = "A") +
+  theme(plot.tag          = element_text(size = 20, face = "bold"),
+        plot.tag.position = c(0, 2.8),
+        axis.title.y      = element_blank(),
+        plot.margin       = margin(t = 5, r = 5, b = 5, l = 15))  # increase l
+
+fig1b_no_label
+
+# Add a global y axis label using cowplot
+fig1b_final <- ggdraw(fig1b_no_label) +
+ # labs(tag = "A") +
   draw_label("Cumulative disease targeted", 
              x = 0.01,          # horizontal position (0 = far left)
              y = 0.5,           # vertical position (0.5 = middle)
@@ -6758,7 +6790,17 @@ fig1c <- fig1c_build +
   theme(plot.tag = element_text(size = 20, face = "bold"))
 fig1c
 
+# sorry again 
+fig1c <- fig1c_build +
+  labs(tag = "B") +
+  theme(plot.tag = element_text(size = 16, face = "bold"))
+fig1c
+
+
 plot_grid(fig1b_final, fig1c)
+
+
+plot_grid(fig1b_final, fig1c, ncol = 2, rel_widths = c(.4, .3), labels = "A")
 
 
 ###################################### 
@@ -7559,9 +7601,9 @@ head(cumulative_admin_curves)
 # ── Step 6: Efficiency curves plot ────────────────────────────────────────────
 
 strategy_colors_admin    <- c("Rao (cluster-level)" = "black",
-                              "Rao (admin-level)"   = "steelblue4")
+                              "Rao (admin-level)"   = "seagreen")
 strategy_linetypes_admin <- c("Rao (cluster-level)" = "solid",
-                              "Rao (admin-level)"   = "solid")
+                              "Rao (admin-level)"   = "dashed")
 
 plot_admin_location_nox <- function(loc, nc) {
   cumulative_admin_curves %>%
@@ -7623,12 +7665,17 @@ library(patchwork)
 # Build all three WITH x-axis text/ticks (not suppressed)
 plot_admin_location_full <- function(loc, nc) {
   cumulative_admin_curves %>%
+    mutate(pathogen = replace(pathogen, pathogen == "Trichuris", "T. trichiura"),
+           pathogen = replace(pathogen, pathogen == "Plasmodium falciparum", "P. falciparum"),
+           pathogen = replace(pathogen, pathogen == "Plasmodium vivax", "P. vivax"),
+           pathogen = replace(pathogen, pathogen == "Ascaris", "A. lumbricoides"), 
+           pathogen = replace(pathogen, pathogen == "Strongyloides stercoralis", "S. stercoralis")) %>%
     filter(location == loc) %>%
     ggplot() +
     geom_line(aes(x = frac_clusters, y = cum_fraction,
-                  color = strategy, linetype = strategy), lwd = 1.25) +
+                  color = strategy, linetype = strategy), lwd = 1.25, alpha = .85) +
     facet_wrap(vars(pathogen), ncol = nc) +
-    geom_hline(yintercept = .80, col = "gray70", lty = "dashed") +
+   # geom_hline(yintercept = .80, col = "gray70", lty = "dashed") +
     scale_color_manual(values = strategy_colors_admin, name = "Strategy") +
     scale_linetype_manual(values = strategy_linetypes_admin, name = "Strategy") +
     theme_bw(base_size = 11) +
@@ -7641,10 +7688,11 @@ plot_admin_location_full <- function(loc, nc) {
           axis.title.x     = element_text(size = 14),
           axis.title.y     = element_blank(),
           legend.position  = "none",
-          plot.title       = element_text(size = 14, face = "bold"))
+          plot.title       = element_text(size = 14))
 }
 
 p_bangl_admin <- plot_admin_location_full("Bangladesh", nc = 3)
+
 p_kenya_admin <- plot_admin_location_full("Kenya",      nc = 3)
 p_cambo_admin <- plot_admin_location_full("Cambodia",   nc = 3)
 
@@ -7697,6 +7745,9 @@ fig2b
 
 
 
+
+
+
 # ── Step 7: Updated maps at coarser admin level ───────────────────────────────
 
 # Kenya map — admin3
@@ -7714,8 +7765,8 @@ kenya_map_admin <- ggplot(data = rao_by_admin %>% filter(location == "Kenya")) +
   ggtitle("Kenya (admin 3)") +
   theme_minimal() +
   theme(plot.title    = element_text(size = 20),
-        legend.text   = element_text(size = 14),
-        legend.title  = element_text(size = 16),
+        legend.text   = element_text(size = 12),
+        legend.title  = element_text(size = 14),
         legend.position = "bottom",
         axis.title = element_blank(),
         axis.text  = element_blank(),
@@ -7741,8 +7792,8 @@ bangl_map_admin <- ggplot(data = rao_by_admin %>% filter(location == "Bangladesh
   ggtitle("Bangladesh (admin 3)") +
   theme_minimal() +
   theme(plot.title    = element_text(size = 20),
-        legend.text   = element_text(size = 14),
-        legend.title  = element_text(size = 16),
+        legend.text   = element_text(size = 12),
+        legend.title  = element_text(size = 14),
         legend.position = "bottom",
         axis.title = element_blank(),
         axis.text  = element_blank(),
@@ -7768,8 +7819,8 @@ cambo_map_admin <- ggplot(data = rao_by_admin %>% filter(location == "Cambodia")
   ggtitle("Cambodia (province)") +
   theme_minimal() +
   theme(plot.title    = element_text(size = 20),
-        legend.text   = element_text(size = 14),
-        legend.title  = element_text(size = 16),
+        legend.text   = element_text(size = 12),
+        legend.title  = element_text(size = 14),
         legend.position = "bottom",
         axis.title = element_blank(),
         axis.text  = element_blank(),
@@ -7781,6 +7832,1054 @@ plot_grid(bangl_map_admin, kenya_map_admin, cambo_map_admin, nrow = 1)
 dat_admin %>%
   group_by(location) %>%
   summarise(n_admin_units = n_distinct(admin_unit), .groups = "drop")
+
+
+########## make figure 2 
+
+####################### rao at spatial cluster level 
+
+
+# Read admin 2 in 
+admin_k_study <- st_read(here("data/kenya/gps/ken_admin_boundaries.shp", "ken_admin2.shp"))
+# Load treatment assignment and GPS data
+treatment_assignment <- read.csv(file = here("data/kenya/primary_outcomes", "endline-anthro.csv")) %>%
+  distinct(block, clusterid, tr)
+
+gps_dat_kenya <- readRDS(file = here("data/kenya/gps", "kenya_analysis_gps.rds")) %>%
+  group_by(block) %>%
+  mutate(long = median(lon), lat = median(lat)) %>%
+  distinct(block, long, lat)
+
+luminex_bound <- read.csv(file = here("data/kenya/luminex/final",
+                                      "washb_kenya_luminex_igg_seropos_2025-09-21.csv")) %>%
+  mutate(dataid = str_extract(childid, "(?<=-)\\d{5}(?=-)")) %>%
+  left_join(treatment_assignment, by = "clusterid") %>%
+  left_join(gps_dat_kenya, by = "block") %>%
+  distinct(long, lat, block, eed) %>%
+  group_by(long, lat) %>%
+  arrange(desc(eed == "EED substudy")) %>%
+  slice(1) %>%
+  ungroup() %>%
+  mutate(Study = eed)
+
+# Bounding box from data
+xmin_k <- min(luminex_bound$long, na.rm = TRUE) - 0.1
+xmax_k <- max(luminex_bound$long, na.rm = TRUE) + 0.1
+ymin_k <- min(luminex_bound$lat,  na.rm = TRUE) - 0.1
+ymax_k <- max(luminex_bound$lat,  na.rm = TRUE) + 0.1
+
+
+head(rao_by_cluster)
+# make real maps 
+kenya_map_rao <- ggplot(
+  data = rao_by_cluster  %>% filter(location == "Kenya")) +
+  geom_sf(data = ken_admin3,
+    #data = admin_k_study,
+          fill  = alpha("seagreen", 0.06),
+          color = alpha("black", 0.15),
+          lwd   = 0.50) +
+  geom_point(aes(x = long, y = lat, color = rao), cex = 5, alpha = .93 ) + #, shape = 24) +  #shape = 24) +
+  theme_minimal() +
+  xlim(c(xmin_k, xmax_k)) +
+  ylim(c(ymin_k, ymax_k)) +
+  theme(legend.position = "none") +
+  ggtitle("Kenya") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title    = element_text(size = 20),
+    plot.subtitle = element_text(size = 20),
+    plot.tag      = element_text(face = "bold", size = 20),
+    legend.text   = element_text(size = 18),
+    legend.title  = element_text(size = 20),
+    axis.title    = element_blank(),
+    axis.text     = element_blank(),
+    axis.ticks    = element_blank() )
+kenya_map_rao
+
+
+admin_b_study <- get_map("district")
+
+bangl_map_rao = ggplot(rao_by_cluster  %>% filter(location == "Bangladesh")) +
+#  geom_sf(data = admin_b_study, fill = alpha("seagreen", .06),  color = alpha("black", 0.30), lwd = .50) +
+  geom_sf(data = bgd_admin3, fill = alpha("seagreen", .06),  color = alpha("black", 0.15), lwd = .50) +
+  geom_point(aes(x = long, y = lat, color = rao), cex = 5, alpha = .93) +theme_minimal() +
+  ylab("Latitude") + xlab("Longitude") +
+  xlim(c(89.9, 90.8)) +
+  ylim(c(23.9, 25.0))  +
+  theme(legend.position = "none") +
+  ggtitle("Bangladesh") +
+  ylab("") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title      = element_text(size = 20), 
+    plot.subtitle =   element_text(size = 20), 
+    plot.tag         = element_text(face = "bold", size = 20),
+    legend.text = element_text(size = 18), legend.title = element_text(size = 20)) + 
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    axis.ticks = element_blank())
+bangl_map_rao
+
+plot_grid(bangl_map_rao, kenya_map_rao, nrow = 1)
+
+
+# Load country-level boundaries for the world
+countries <- ne_countries(scale = "medium", returnclass = "sf")
+# Filter for Cambodia
+cambodia_map <- countries[countries$name == "Cambodia", ]
+
+# First administrative boundaries (provinces)
+cambodia_admin1 <- ne_states(
+  country = "Cambodia",
+  returnclass = "sf")
+
+# second admin 
+library(geodata)
+library(sf)
+
+# Download Cambodia admin2 boundaries
+khm_admin2 <- geodata::gadm(
+  country = "KHM",
+  level = 2,
+  path = tempdir()
+)
+
+# Convert to sf
+khm_admin2_sf <- st_as_sf(khm_admin2)
+
+cam_map_rao <- ggplot(data = rao_by_cluster  %>% filter(location == "Cambodia") ) + 
+  # geom_sf(data = cambodia_map, fill =  alpha("seagreen", .06), color = alpha("black", 0.30), lwd = .50) +
+  geom_point(aes(x = long, y = lat, color = rao), cex = 5, alpha = .93) +theme_minimal() +
+  # geom_sf(data = cambodia_admin1,
+  #  fill =  alpha("seagreen", .06),
+  # color = alpha("black", 0.35),
+  #  linewidth = 0.35) +
+  geom_sf( 
+    #data = cam_admin1,
+    data = khm_admin2_sf,
+    fill =  alpha("seagreen", .06),
+    color = alpha("black", 0.15),
+    linewidth = 0.2) +
+  ylab("Latitude") + xlab("Longitude") +
+  ggtitle("Cambodia") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  scale_color_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  theme(
+    plot.title      = element_text(size = 20), 
+    plot.subtitle =   element_text(size = 20), 
+    plot.tag         = element_text(face = "bold", size = 20),
+    legend.text = element_text(size = 14), legend.title = element_text(size = 14), 
+    legend.position = "right") + 
+  theme(
+    axis.title = element_blank(),
+    axis.text  = element_blank(),
+    axis.ticks = element_blank())
+cam_map_rao 
+
+plot_grid(bangl_map_rao, kenya_map_rao, cam_map_rao, nrow = 1)
+
+
+
+
+two = plot_grid(bangl_map_rao, kenya_map_rao, nrow = 1)
+two
+
+maps_rao = plot_grid(two , cam_map_rao )
+
+fig2a_shifted <- ggdraw() +
+  draw_plot(maps_rao, x = 0.05, y = 0, width = 0.95, height = 1)
+
+
+fig2a<- fig2a_shifted +
+  labs(tag = "A") +
+  theme(plot.tag = element_text(size = 20, face = "bold"))
+fig2a
+
+fig2a <- fig2a_shifted +
+  labs(tag = "A") +
+  theme(plot.tag          = element_text(size = 20, face = "bold"),
+        plot.tag.position = c(0, 0.95))  # default top is (0, 1); lower y shifts down
+fig2a
+
+#### combine for fig 2 
+
+plot_grid(fig2a, fig2b, ncol =1 , rel_heights = c(1, 1.25))
+# 1300 x 1200
+
+
+
+####################################################################
+# OKAY BART models 
+place_clim =   readr::read_csv(file = here("data", "place_loc_climate.csv")) 
+head(place_clim)
+
+pred_rao_kenya = kenya_meta %>% 
+  left_join(child_death, by = "hhid") %>%
+  left_join(block_kenya, by = c("block", "clusterid")) %>%
+  mutate(nutrition_deprived = ifelse(HHS_bi == 1, 1, 0)) %>% # moderate to severe hunger 
+  mutate(hygiene_deprived = ifelse(hws_bl == 1 |  tr %in% c("Handwashing", "WSH") , 0, 1)) %>% # added
+  mutate(mat_edu_deprived = ifelse(mother_edu == 0, 1, 0)) %>% # did not complete primary school
+  mutate(sanitation_deprived = ifelse(imp_lat_el == 0 | tr == "WSH", 1, 0)) %>% # at endline improved latrine, maybe want to include treatment  
+  mutate(water_deprived = ifelse(prim_drink_ws_bl == 1 & water_time < 31 | tr == "WSH" , 0, 1 )) %>%
+  mutate(across(roof:car, ~replace(., . > 8, NA))) %>%
+  mutate(electricity_deprived = ifelse(elec == 1, 0 ,1)) %>%
+  mutate(cooking_deprived = ifelse(cooker == 1, 0, 1)) %>%
+  mutate(floor_deprived = ifelse(floor == 0, 1, 0)) %>%
+  mutate(housing_deprived = ifelse(roof == 1 | floor == 1 | walls == 1, 0, 1)) %>%
+  mutate(asset_count = radio + tv + mobilephone + bicycle + car + motorcycle ) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  group_by(block) %>%
+  summarize(across(nutrition_deprived:assets_deprived, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(spatial_cluster = block, location = "Kenya") %>%
+  dplyr::select(-block)  %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  left_join(place_clim, by = c("location", "lat", "long")) %>%
+  drop_na() 
+head(pred_rao_kenya)
+
+# ── 1. Prep predictor matrix and outcome ──────────────────────────────────────
+predictors <- pred_rao_kenya %>%
+  dplyr::select(nutrition_deprived:assets_deprived, mpi_standard, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+
+outcome <- log(pred_rao_kenya$rao + .001)
+
+# ── 2. K-fold cross validation (k = 5) ───────────────────────────────────────
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+
+cv_preds <- numeric(nrow(predictors))
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  #train_y <- outcome_logit[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x,
+               y.train = train_y,
+               x.test  = test_x,
+               ndpost  = 1000,
+               nskip   = 250,
+               printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+
+# ── 3. Error metrics ──────────────────────────────────────────────────────────
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- 1 - (ss_res / ss_tot)
+r2 = round(r2, digits = 3)
+r2
+
+
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+rank_cor
+
+top_k <- round(nrow(predictors) * 0.30)  # top 20% of clusters
+true_top      <- order(outcome, decreasing = TRUE)[1:top_k]
+predicted_top <- order(cv_preds,    decreasing = TRUE)[1:top_k]
+overlap <- length(intersect(true_top, predicted_top))
+overlap / top_k
+
+top_k/89
+
+# ── 4. Figure 1: Observed vs Predicted ───────────────────────────────────────
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  annotate("text", x = min(outcome, na.rm = TRUE), 
+           y = max(cv_preds, na.rm = TRUE),
+           label =  " ", 
+           hjust = 0, vjust = 1, size = 5) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Kenya", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1 )) + 
+  xlim(c(0,1))
+
+fig_fit
+
+# ── 5. Full model for variable importance ─────────────────────────────────────
+fit_full <- wbart(x.train = predictors,
+                  y.train = outcome,
+                  ndpost  = 1000,
+                  nskip   = 250,
+                  printevery = 0)
+
+# Variable inclusion proportions (times each var used in tree splits)
+var_importance <- tibble(
+  variable   = colnames(predictors),
+  importance = colMeans(fit_full$varcount / rowSums(fit_full$varcount))
+) %>%
+  arrange(importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+# ── 6. Figure 2: Variable Importance ─────────────────────────────────────────
+fig_varimp <- ggplot(var_importance, aes(x = importance/((100/14)/100), y = variable)) +
+  geom_col(fill = "darkmagenta", alpha = 0.8) +
+  theme_bw(base_size = 13) +
+  labs(x = "Relative variable inclusion proportion",
+       y = NULL,
+       title = "Variable importance- Kenya") +
+  theme(plot.title = element_text(size = 14),
+        axis.text.y = element_text(size = 12)) +
+  geom_vline(xintercept = 1) 
+  geom_vline(xintercept = (100/14)/100) 
+
+fig_varimp
+
+plot_grid(fig_fit, fig_varimp, nrow = 1, rel_widths = c(.4, .7))
+
+
+
+
+###########################################
+# bangl 
+# Bangladesh 
+gps_dat = read_dta(file = here("data/bangl/gps/untouched", "6. WASHB_Baseline_gps.dta")) %>%
+  mutate(dataid = as.numeric(dataid)) %>% # had to add later? 
+  left_join(public_ids, by = "dataid") %>% 
+  dplyr::select(block, block_r, qgpslong, qgpslat) %>%
+  group_by(block) %>%
+  mutate(med_qgpslong = median(qgpslong), med_qgpslat = median(qgpslat)) %>%
+  distinct(block, block_r, med_qgpslong, med_qgpslat) 
+
+
+pred_rao_bangl = bangl_metadata %>%
+  left_join(treatment_bangl, by = c("clusterid", "block")) %>%
+  #  filter(tr %in% c("Control", "Nutrition")) %>%
+  mutate(nutrition_deprived = ifelse(hfiacat == "Food Secure", 0, 1)) %>%
+  # mortality not available 
+  mutate(mat_edu_deprived  = ifelse(momedu == "Secondary (>5y)", 0, 1)) %>%
+  # cooking not avaiable 
+  mutate(sanitation_deprived = ifelse(latown == 1 & latseal == 1 & latfeces == 1 | tr %in% c("Sanitation", "WSH") , 0, 1)) %>%
+  mutate(water_deprived = ifelse(tubewell == 1 & watmin < 30 | tr %in% c("Water", "WSH") , 0, 1 )) %>%
+  mutate(hygiene_deprived = ifelse(hwsws == 1 |  tr %in% c("Handwashing", "WSH") , 0, 1)) %>% # added
+  mutate(floor_deprived = ifelse(cement == 0, 1, 0)) %>% # added
+  mutate(electricity_deprived = ifelse(elec == 1, 0, 1)) %>%
+  mutate(housing_deprived = ifelse(roof == 1 | floor == 1 | walls == 1, 0, 1)) %>%
+  mutate(asset_count = rowSums(across(asset_radio:asset_refrig), na.rm = TRUE)) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  group_by(block) %>%
+  summarize(across(nutrition_deprived:assets_deprived, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(block_r = block) %>% dplyr::select(-block) %>%
+  left_join(gps_dat, by = "block_r") %>%
+  mutate(spatial_cluster = block) %>%
+  mutate(location = "Bangladesh") %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster"))  %>%
+  mutate(lat = round(lat, 5), long = round(long, 5)) %>%
+  left_join(place_clim %>%  mutate(lat = round(lat, 5), long = round(long, 5)), by = c("location", "lat", "long")) %>%
+  drop_na() 
+head(pred_rao_bangl)
+
+
+# ── 1. Prep predictor matrix and outcome ──────────────────────────────────────
+predictors <- pred_rao_bangl %>%
+  dplyr::select(nutrition_deprived:assets_deprived, mpi_standard, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+
+outcome <- log(pred_rao_bangl$rao)
+
+# ── 2. K-fold cross validation (k = 5) ───────────────────────────────────────
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+
+cv_preds <- numeric(nrow(predictors))
+#cv_preds_logit <- numeric(nrow(predictors)) 
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  #train_y <- outcome_logit[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  # ── Oversample high-Rao observations in the TRAINING set only ──────────────
+  # Use outcome_raw (not logit) to define "high" in the original 0-1 scale
+  n_repeats <- 4   # increase this to boost weight further (try 3, 5, 8, etc.)
+  
+ # train_x_boosted <- rbind(train_x, 
+  #                         do.call(rbind, replicate(n_repeats, train_x[high_rao_idx, , drop = FALSE], simplify = FALSE)))
+ # train_y_boosted <- c(train_y, 
+       #                rep(train_y[high_rao_idx], n_repeats))
+  
+  
+  fit <- wbart(
+              #x.train = train_x_boosted,
+              # y.train = train_y_boosted,
+               x.train = train_x,
+               y.train = train_y,
+               x.test  = test_x,
+               ndpost  = 2000,
+               nskip   = 250,
+               printevery = 0)
+  #cv_preds_logit[folds == i] <- fit$yhat.test.mean
+ cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+
+
+# ── 3. Error metrics ──────────────────────────────────────────────────────────
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- 1 - (ss_res / ss_tot)
+r2
+r2 = round(r2, digits = 3)
+
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+rank_cor
+
+top_k <- round(nrow(predictors) * 0.40)  # top 20% of clusters
+true_top      <- order(outcome, decreasing = TRUE)[1:top_k]
+predicted_top <- order(cv_preds,    decreasing = TRUE)[1:top_k]
+overlap <- length(intersect(true_top, predicted_top))
+overlap / top_k
+
+top_k/90
+
+
+# ── 4. Figure 1: Observed vs Predicted ───────────────────────────────────────
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+
+fig_fit <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  annotate("text", x = min(outcome, na.rm = TRUE), 
+           y = max(cv_preds, na.rm = TRUE),
+           label = "",
+           hjust = 0, vjust = 1, size = 5) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Bangladesh", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1 )) + 
+  xlim(c(0,1))
+fig_fit
+
+# Plot residuals vs observed - will show the pattern clearly
+cv_df %>%
+  mutate(residual = predicted - observed) %>%
+  ggplot(aes(x = observed, y = residual)) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "darkmagenta") +
+  theme_bw() +
+  labs(title = "Bangladesh", x = "Observed Rao's index", y = "Residual (predicted - observed)")
+
+# ── 5. Full model for variable importance ─────────────────────────────────────
+fit_full <- wbart(x.train = predictors,
+                  y.train = outcome,
+                  ndpost  = 1000,
+                  nskip   = 250,
+                  printevery = 0)
+
+# Variable inclusion proportions (times each var used in tree splits)
+var_importance <- tibble(
+  variable   = colnames(predictors),
+  importance = colMeans(fit_full$varcount / rowSums(fit_full$varcount))) %>%
+  arrange(importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+100/13
+# ── 6. Figure 2: Variable Importance ─────────────────────────────────────────
+fig_varimp <- ggplot(var_importance[1:6,], aes(x = importance/.0769, y = variable)) +
+  geom_col(fill = "darkmagenta", alpha = 0.8) +
+  theme_bw(base_size = 13) +
+  labs(x = "Relative variable inclusion proportion",
+       y = NULL,
+       title = "Variable Importance- Bangladesh") +
+  theme(plot.title = element_text(size = 14),
+        axis.text.y = element_text(size = 12))
+
+fig_varimp
+
+plot_grid(fig_fit, fig_varimp, nrow = 1, rel_widths = c(.4, .7))
+
+
+
+
+################# cambodia 
+# Load location data 
+gps_cambodia =   readr::read_csv(file = here("projects/6-multipathogen-burden/data/cambodia", "cambodia_ea_dhs.csv")) 
+gps_dat_cam = cambodia_serology %>%
+  dplyr::select(dhsclust, psuid) %>% distinct()
+head(gps_dat_cam)
+
+
+predict_rao_cam = cam_wealth_data %>%
+  mutate(nutrition_deprived = ifelse(is.na(ha40), NA,
+                                     ifelse(ha40 < 1850, 1, 0))) %>% # BMI *100
+  mutate(mortality = ifelse(is.na(hv111), NA, 
+                            ifelse(hv111 == 0, 1, 0))) %>%
+  mutate(mat_edu_deprived = ifelse(is.na(ha67), NA, 
+                                   ifelse(ha67 == 99, NA, 
+                                          ifelse(ha67  == 0 | ha67 == 1, 1, 0)))) %>% # 0 is no education, # 1 is pre-primary 
+  mutate(cooking_deprived = ifelse(hv226 == 6 | hv226 == 7 | hv226 == 8 | hv226 == 9| hv226 == 10| hv226 == 11, 1, 0)) %>% 
+  # coal, charcoal, wood, straw/grass/ ag crop residue, animal dung 
+  mutate(sanitation_deprived = case_when(
+    hv205 %in% c(15,23,31,41,42,43) ~ 1, # flush idk where, pit w/out slab, no facility, composting, bucket, hanging toilet 
+    hv205 != 99 & hv225 == 1 ~ 1,
+    hv205 != 99 & hv225 == 0 ~ 0,
+    TRUE ~ NA_real_ ) ) %>%
+  mutate(sh104 = replace(sh104, sh104 > 900, NA), sh104b = replace(sh104b, sh104b > 900, NA)) %>%
+  mutate(water_deprived = case_when(
+    hv237 == 0 ~ 1,
+    hv237 == 1 & sh104  > 30 ~ 1,
+    hv237 == 1 & sh104b > 30 ~ 1,
+    hv237 == 1 ~ 0,
+    TRUE ~ NA_real_)) %>%
+  mutate(hygiene_deprived = ifelse(sh138 ==1 & sh139a == 1, 0, 1)) %>%
+  mutate(floor_deprived = ifelse(hv123 ==1, 0, 1)) %>%
+  mutate( hv206 = replace(hv206, hv206 > 2, NA)) %>%
+  mutate(electricity_deprived = ifelse(hv206 == 0, 1, 0 )) %>%
+  mutate(housing_deprived = case_when(
+    hv213 %in% c(11,21) |
+      hv214 %in% c(11,12,13,21,22,23) |
+      hv215 %in% c(11,12,21,22,23,24) ~ 1,
+    hv213 == 96 | hv214 %in% c(96,99) | hv215 %in% c(96,99) ~ NA_real_,
+    TRUE ~ 0)) %>%
+  mutate(asset_count = hv208 + hv209 + hv210 + hv211 + hv212 + hv221 + hv243c, na.rm = TRUE ) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  mutate(dhsclust = hv001) %>%
+  left_join(gps_dat_cam, by = "dhsclust") %>%
+  mutate(psuid = psuid + 1) %>%
+  mutate(spatial_cluster = psuid) %>% mutate(Location = "Cambodia") %>% dplyr::select(-psuid) %>% 
+  mutate(floor_deprived = housing_deprived) %>%
+  group_by(spatial_cluster) %>%
+  summarize(across(nutrition_deprived:assets_deprived, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(location = "Cambodia") %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  mutate(lat = round(lat, 5), long = round(long, 5)) %>%
+  left_join(place_clim %>%  mutate(lat = round(lat, 5), long = round(long, 5)), by = c("location", "lat", "long")) %>%
+  drop_na() 
+head(predict_rao_cam )
+
+cam_distances = readr::read_csv(file = here("data/cambodia", "healthcare_dist_cambodia_with_distances.csv")) %>%
+  mutate(spatial_cluster = psuid) %>%
+  left_join(predict_rao_cam, by = "spatial_cluster") %>% drop_na()
+head(cam_distances)
+
+
+# ── 1. Prep predictor matrix and outcome ──────────────────────────────────────
+predictors <- cam_distances  %>%
+  dplyr::select(nutrition_deprived, hygiene_deprived, mat_edu_deprived, 
+                sanitation_deprived, water_deprived, electricity_deprived,
+                cooking_deprived, floor_deprived, housing_deprived, 
+                assets_deprived, mpi_standard, distance_km, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+
+outcome <- log(cam_distances$rao + .001)
+table(outcome)
+
+# ── 2. K-fold cross validation (k = 5) ───────────────────────────────────────
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+
+cv_preds <- numeric(nrow(predictors))
+
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x,
+               y.train = train_y,
+               x.test  = test_x,
+               ndpost  = 2000,
+               nskip   = 250,
+               printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+
+# ── 3. Error metrics ──────────────────────────────────────────────────────────
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- 1 - (ss_res / ss_tot)
+r2
+r2 = round(r2, digits =3)
+
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+rank_cor
+
+# ── 4. Figure 1: Observed vs Predicted ───────────────────────────────────────
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  annotate("text", x = min(outcome, na.rm = TRUE), 
+           y = max(cv_preds, na.rm = TRUE),
+           label = "",
+           hjust = 0, vjust = 1, size = 5) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Cambodia", 
+       subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1 )) + 
+  xlim(c(0,1))
+
+fig_fit
+
+# ── 5. Full model for variable importance ─────────────────────────────────────
+fit_full <- wbart(x.train = predictors,
+                  y.train = outcome,
+                  ndpost  = 1000,
+                  nskip   = 250,
+                  printevery = 0)
+
+# Variable inclusion proportions (times each var used in tree splits)
+var_importance <- tibble(
+  variable   = colnames(predictors),
+  importance = colMeans(fit_full$varcount / rowSums(fit_full$varcount))) %>%
+  arrange(importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+# ── 6. Figure 2: Variable Importance ─────────────────────────────────────────
+fig_varimp <- ggplot(var_importance, aes(x = importance, y = variable)) +
+  geom_col(fill = "darkmagenta", alpha = 0.8) +
+  theme_bw(base_size = 13) +
+  geom_vline(xintercept = (100/14)/100) + 
+  labs(x = "Relative variable inclusion proportion",
+       y = NULL,
+       title = "Variable Importance- Cambodia") +
+  theme(plot.title = element_text(size = 14),
+        axis.text.y = element_text(size = 12))
+
+fig_varimp
+
+plot_grid(fig_fit, fig_varimp, nrow = 1, rel_widths = c(.4, .7))
+
+
+
+
+
+
+
+################################################################
+####################################################################
+# BART models with permutation-based variable importance threshold
+####################################################################
+
+# ── Helper function: permutation test for variable importance ────────────────
+# Shuffles the outcome, refits BART, and records importance under the null.
+# Returns the 95th percentile of null importance for EACH variable, which
+# accounts for variables having different numbers of split points
+# (continuous variables get more candidate splits than binary indicators).
+
+permutation_importance_threshold <- function(predictors, outcome, n_perms = 50,
+                                             ndpost = 200, nskip = 100) {
+  null_importance <- matrix(NA, nrow = n_perms, ncol = ncol(predictors))
+  colnames(null_importance) <- colnames(predictors)
+  
+  for (p in 1:n_perms) {
+    outcome_shuffled <- sample(outcome)
+    
+    fit_null <- wbart(x.train = predictors,
+                      y.train = outcome_shuffled,
+                      ndpost  = ndpost,
+                      nskip   = nskip,
+                      printevery = 0)
+    
+    null_importance[p, ] <- colMeans(fit_null$varcount / rowSums(fit_null$varcount))
+  }
+  
+  null_importance
+}
+
+# ── Helper function: build the variable importance plot ─────────────────────
+plot_var_importance <- function(var_importance, location_name, rank_cor) {
+  ggplot(var_importance, aes(x = observed_importance, y = variable)) + 
+                         #    fill = exceeds_null)) +
+    geom_col(alpha = 0.35, fill = "orangered") +
+ #   geom_errorbar(aes(xmin = null_95th_percentile, xmax = null_95th_percentile),
+  #                width = 0.4, color = "black", linewidth = 0.6) +
+   # scale_fill_manual(#values = c("TRUE" = "darkmagenta", "FALSE" = "gray70"),
+        #              aesfill = "orangered") + 
+                   #   name = "Above chance\nthreshold") +
+    theme_bw(base_size = 13) +
+    labs(x = "Variable inclusion proportion", y = NULL,
+         title = paste0(location_name),
+         subtitle = paste0("ρ = ",
+                           round(rank_cor, 2))) +
+    theme(plot.title    = element_text(size = 14),
+          plot.subtitle = element_text(size = 12),
+          axis.text.y   = element_text(size = 12),
+          legend.position = "bottom")
+}
+
+####################################################################
+# KENYA
+####################################################################
+place_clim <- readr::read_csv(file = here("data", "place_loc_climate.csv"))
+
+pred_rao_kenya <- kenya_meta %>%
+  left_join(child_death, by = "hhid") %>%
+  left_join(block_kenya, by = c("block", "clusterid")) %>%
+  mutate(nutrition_deprived = ifelse(HHS_bi == 1, 1, 0)) %>%
+  mutate(hygiene_deprived = ifelse(hws_bl == 1 | tr %in% c("Handwashing", "WSH"), 0, 1)) %>%
+  mutate(mat_edu_deprived = ifelse(mother_edu == 0, 1, 0)) %>%
+  mutate(sanitation_deprived = ifelse(imp_lat_el == 0 | tr == "WSH", 1, 0)) %>%
+  mutate(water_deprived = ifelse(prim_drink_ws_bl == 1 & water_time < 31 | tr == "WSH", 0, 1)) %>%
+  mutate(across(roof:car, ~replace(., . > 8, NA))) %>%
+  mutate(electricity_deprived = ifelse(elec == 1, 0, 1)) %>%
+  mutate(cooking_deprived = ifelse(cooker == 1, 0, 1)) %>%
+  mutate(floor_deprived = ifelse(floor == 0, 1, 0)) %>%
+  mutate(housing_deprived = ifelse(roof == 1 | floor == 1 | walls == 1, 0, 1)) %>%
+  mutate(asset_count = radio + tv + mobilephone + bicycle + car + motorcycle) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  mutate(animal_ownership = ifelse(poultry > 0 | cow > 0 | goat > 0, 1, 0)) %>%
+  group_by(block) %>%
+  summarize(across(nutrition_deprived:animal_ownership, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(spatial_cluster = block, location = "Kenya") %>%
+  dplyr::select(-block) %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  left_join(place_clim, by = c("location", "lat", "long")) %>%
+  drop_na()
+
+predictors <- pred_rao_kenya %>%
+  dplyr::select(nutrition_deprived:housing_deprived, assets_deprived, animal_ownership, mpi_standard, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+head(predictors)
+colnames(predictors) = c("Food security", "Hygiene", "Maternal education", "Sanitation", "Drinking water",
+                         "Electricity", "Cooking",  "Flooring", "Housing Material", "Assets", "Animal Ownership" ,"Poverty",
+                         "Temperature", "Precipitation")
+head(predictors)
+
+outcome <- log(pred_rao_kenya$rao + .001)
+
+# ── K-fold CV ──────────────────────────────────────────────────────────────
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+cv_preds <- numeric(nrow(predictors))
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x, y.train = train_y, x.test = test_x,
+               ndpost = 1000, nskip = 250, printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- round(1 - (ss_res / ss_tot), digits = 3)
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+
+# ── Fig 1: Observed vs predicted ─────────────────────────────────────────────
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit_kenya <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Kenya", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1)) + xlim(c(0,1))
+fig_fit_kenya
+
+# ── Full model + permutation-based importance threshold ─────────────────────
+fit_full <- wbart(x.train = predictors, y.train = outcome,
+                  ndpost = 1000, nskip = 250, printevery = 0)
+
+observed_importance <- colMeans(fit_full$varcount / rowSums(fit_full$varcount))
+
+null_importance_kenya <- permutation_importance_threshold(predictors, outcome, n_perms = 50)
+null_95th_kenya <- apply(null_importance_kenya, 2, quantile, 0.95)
+
+var_importance_kenya <- tibble(
+  variable             = colnames(predictors),
+  observed_importance  = observed_importance,
+  null_95th_percentile = null_95th_kenya
+) %>%
+  mutate(exceeds_null = observed_importance > null_95th_percentile) %>%
+  arrange(observed_importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+fig_varimp_kenya <- plot_var_importance(var_importance_kenya, "Kenya", rank_cor)
+fig_varimp_kenya
+
+
+####################################################################
+# BANGLADESH
+####################################################################
+gps_dat <- read_dta(file = here("data/bangl/gps/untouched", "6. WASHB_Baseline_gps.dta")) %>%
+  mutate(dataid = as.numeric(dataid)) %>%
+  left_join(public_ids, by = "dataid") %>%
+  dplyr::select(block, block_r, qgpslong, qgpslat) %>%
+  group_by(block) %>%
+  mutate(med_qgpslong = median(qgpslong), med_qgpslat = median(qgpslat)) %>%
+  distinct(block, block_r, med_qgpslong, med_qgpslat)
+
+pred_rao_bangl <- bangl_metadata %>%
+  left_join(treatment_bangl, by = c("clusterid", "block")) %>%
+  mutate(nutrition_deprived = ifelse(hfiacat == "Food Secure", 0, 1)) %>%
+  mutate(mat_edu_deprived  = ifelse(momedu == "Secondary (>5y)", 0, 1)) %>%
+  mutate(sanitation_deprived = ifelse(latown == 1 & latseal == 1 & latfeces == 1 | tr %in% c("Sanitation", "WSH"), 0, 1)) %>%
+  mutate(water_deprived = ifelse(tubewell == 1 & watmin < 30 | tr %in% c("Water", "WSH"), 0, 1)) %>%
+  mutate(hygiene_deprived = ifelse(hwsws == 1 | tr %in% c("Handwashing", "WSH"), 0, 1)) %>%
+  mutate(floor_deprived = ifelse(cement == 0, 1, 0)) %>%
+  mutate(electricity_deprived = ifelse(elec == 1, 0, 1)) %>%
+  mutate(housing_deprived = ifelse(roof == 1 | floor == 1 | walls == 1, 0, 1)) %>%
+  mutate(asset_count = rowSums(across(asset_radio:asset_refrig), na.rm = TRUE)) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  group_by(block) %>%
+  summarize(across(nutrition_deprived:assets_deprived, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(block_r = block) %>% dplyr::select(-block) %>%
+  left_join(gps_dat, by = "block_r") %>%
+  mutate(spatial_cluster = block) %>%
+  mutate(location = "Bangladesh") %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  mutate(lat = round(lat, 5), long = round(long, 5)) %>%
+  left_join(place_clim %>% mutate(lat = round(lat, 5), long = round(long, 5)),
+            by = c("location", "lat", "long")) %>%
+  drop_na() 
+
+predictors <- pred_rao_bangl %>%
+  dplyr::select(nutrition_deprived:housing_deprived, assets_deprived, mpi_standard, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+head(predictors)
+colnames(predictors) = c("Food security", "Maternal education", "Sanitation", "Drinking water", "Hygiene",
+                         "Flooring", "Electricity", "Housing Material", "Assets", "Poverty",
+                         "Temperature", "Precipitation")
+head(predictors)
+
+outcome <- log(pred_rao_bangl$rao)
+
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+cv_preds <- numeric(nrow(predictors))
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x, y.train = train_y, x.test = test_x,
+               ndpost = 2000, nskip = 250, printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- round(1 - (ss_res / ss_tot), digits = 3)
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit_bangl <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Bangladesh", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1)) + xlim(c(0,1))
+fig_fit_bangl
+
+fit_full <- wbart(x.train = predictors, y.train = outcome,
+                  ndpost = 1000, nskip = 250, printevery = 0)
+
+observed_importance <- colMeans(fit_full$varcount / rowSums(fit_full$varcount))
+
+null_importance_bangl <- permutation_importance_threshold(predictors, outcome, n_perms = 50)
+null_95th_bangl <- apply(null_importance_bangl, 2, quantile, 0.95)
+
+var_importance_bangl <- tibble(
+  variable             = colnames(predictors),
+  observed_importance  = observed_importance,
+  null_95th_percentile = null_95th_bangl
+) %>%
+  mutate(exceeds_null = observed_importance > null_95th_percentile) %>%
+  arrange(observed_importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+fig_varimp_bangl <- plot_var_importance(var_importance_bangl, "Bangladesh", rank_cor)
+fig_varimp_bangl
+
+
+####################################################################
+# CAMBODIA
+####################################################################
+gps_cambodia <- readr::read_csv(file = here("projects/6-multipathogen-burden/data/cambodia", "cambodia_ea_dhs.csv"))
+gps_dat_cam <- cambodia_serology %>%
+  dplyr::select(dhsclust, psuid) %>% distinct()
+
+predict_rao_cam <- cam_wealth_data %>%
+  mutate(nutrition_deprived = ifelse(is.na(ha40), NA, ifelse(ha40 < 1850, 1, 0))) %>%
+  mutate(mortality = ifelse(is.na(hv111), NA, ifelse(hv111 == 0, 1, 0))) %>%
+  mutate(mat_edu_deprived = ifelse(is.na(ha67), NA,
+                                   ifelse(ha67 == 99, NA, ifelse(ha67 == 0 | ha67 == 1, 1, 0)))) %>%
+  mutate(cooking_deprived = ifelse(hv226 %in% c(6,7,8,9,10,11), 1, 0)) %>%
+  mutate(sanitation_deprived = case_when(
+    hv205 %in% c(15,23,31,41,42,43) ~ 1,
+    hv205 != 99 & hv225 == 1 ~ 1,
+    hv205 != 99 & hv225 == 0 ~ 0,
+    TRUE ~ NA_real_)) %>%
+  mutate(sh104 = replace(sh104, sh104 > 900, NA), sh104b = replace(sh104b, sh104b > 900, NA)) %>%
+  mutate(water_deprived = case_when(
+    hv237 == 0 ~ 1,
+    hv237 == 1 & sh104  > 30 ~ 1,
+    hv237 == 1 & sh104b > 30 ~ 1,
+    hv237 == 1 ~ 0,
+    TRUE ~ NA_real_)) %>%
+  mutate(hygiene_deprived = ifelse(sh138 == 1 & sh139a == 1, 0, 1)) %>%
+  mutate(floor_deprived = ifelse(hv123 == 1, 0, 1)) %>%
+  mutate(hv206 = replace(hv206, hv206 > 2, NA)) %>%
+  mutate(electricity_deprived = ifelse(hv206 == 0, 1, 0)) %>%
+  mutate(housing_deprived = case_when(
+    hv213 %in% c(11,21) |
+      hv214 %in% c(11,12,13,21,22,23) |
+      hv215 %in% c(11,12,21,22,23,24) ~ 1,
+    hv213 == 96 | hv214 %in% c(96,99) | hv215 %in% c(96,99) ~ NA_real_,
+    TRUE ~ 0)) %>%
+  mutate(asset_count = hv208 + hv209 + hv210 + hv211 + hv212 + hv221 + hv243c, na.rm = TRUE) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  mutate(dhsclust = hv001) %>%
+  left_join(gps_dat_cam, by = "dhsclust") %>%
+  mutate(psuid = psuid + 1) %>%
+  mutate(spatial_cluster = psuid) %>% mutate(Location = "Cambodia") %>% dplyr::select(-psuid) %>%
+  mutate(floor_deprived = housing_deprived) %>%
+  group_by(spatial_cluster) %>%
+  summarize(across(nutrition_deprived:assets_deprived, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(location = "Cambodia") %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  mutate(lat = round(lat, 5), long = round(long, 5)) %>%
+  left_join(place_clim %>% mutate(lat = round(lat, 5), long = round(long, 5)),
+            by = c("location", "lat", "long")) %>%
+  drop_na()
+
+cam_distances <- readr::read_csv(file = here("data/cambodia", "healthcare_dist_cambodia_with_distances.csv")) %>%
+  mutate(spatial_cluster = psuid) %>%
+  left_join(predict_rao_cam, by = "spatial_cluster") %>%
+  drop_na()
+
+predictors <- cam_distances %>%
+  dplyr::select(nutrition_deprived, hygiene_deprived, mat_edu_deprived,
+                sanitation_deprived, water_deprived, electricity_deprived,
+                cooking_deprived, floor_deprived, housing_deprived,
+                assets_deprived, mpi_standard, distance_km, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+head(predictors)
+colnames(predictors) = c("Food security", "Hygiene", "Education", "Sanitation", "Drinking water", 
+                        "Electricity", "Cooking", "Flooring", "Housing Material", "Assets", "Poverty",
+                        "Healthcare proximity", "Temperature", "Precipitation")
+head(predictors)
+
+
+
+
+
+
+outcome <- log(cam_distances$rao + .001)
+
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+cv_preds <- numeric(nrow(predictors))
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x, y.train = train_y, x.test = test_x,
+               ndpost = 2000, nskip = 250, printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- round(1 - (ss_res / ss_tot), digits = 3)
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit_cambo <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Cambodia", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1)) + xlim(c(0,1))
+fig_fit_cambo
+
+fit_full <- wbart(x.train = predictors, y.train = outcome,
+                  ndpost = 1000, nskip = 250, printevery = 0)
+
+observed_importance <- colMeans(fit_full$varcount / rowSums(fit_full$varcount))
+
+null_importance_cambo <- permutation_importance_threshold(predictors, outcome, n_perms = 50)
+null_95th_cambo <- apply(null_importance_cambo, 2, quantile, 0.95)
+
+var_importance_cambo <- tibble(
+  variable             = colnames(predictors),
+  observed_importance  = observed_importance,
+  null_95th_percentile = null_95th_cambo
+) %>%
+  mutate(exceeds_null = observed_importance > null_95th_percentile) %>%
+  arrange(observed_importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+fig_varimp_cambo <- plot_var_importance(var_importance_cambo, "Cambodia", rank_cor)
+fig_varimp_cambo
+
+
+# combine 
+
+fig3b_build = plot_grid(fig_varimp_bangl, fig_varimp_kenya, fig_varimp_cambo, ncol = 3) 
+
+fig3b <- fig3b_build +
+  labs(tag = "B") +
+  theme(plot.tag = element_text(size = 20, face = "bold"))
+fig3b
+
+
+plot_grid(fig3a, fig3b, ncol = 1)
+
+
+
 
 
 
