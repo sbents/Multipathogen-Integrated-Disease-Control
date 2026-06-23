@@ -5906,11 +5906,12 @@ print(unique(sth$pathogen))
 bangl_targeting_cluster = rbind(bangl_targeting_cluster_lum , sth)
 head(bangl_targeting_cluster)
 # plot histogram of distribution of intervention need again 
-ggplot(data = bangl_targeting_cluster) +
-  geom_histogram(aes(x = fraction)) +
+bangl_supp_prev = ggplot(data = bangl_targeting_cluster %>%  mutate(pathogen = replace(pathogen, pathogen == "Trichuris", "T. trichiura"),
+                                                                    pathogen = replace(pathogen, pathogen == "Ascaris", "A. lumbricoides") )) +
+  geom_histogram(aes(x = fraction), fill = "lightskyblue3") +
   facet_wrap(vars(pathogen), scales = "free") + theme_minimal() +
-  ggtitle("Bangladesh")
-
+  ggtitle("Bangladesh") + ylab("Count") + xlab("Cluster-level prevalence")
+bangl_supp_prev 
 
 
 ########################################################
@@ -5994,10 +5995,11 @@ head(kenya_targeting_cluster)
 
 
 # plot histogram of distribution of intervention need 
-ggplot(data = kenya_targeting_cluster) +
-  geom_histogram(aes(x = fraction)) +
+ken_supp_prev = ggplot(data = kenya_targeting_cluster) +
+  geom_histogram(aes(x = fraction), fill = "lightskyblue3") +
   facet_wrap(vars(pathogen), scales = "free") + theme_minimal() +
-  ggtitle("Kenya")
+  ggtitle("Kenya")+ ylab("Count") + xlab("Cluster-level prevalence")
+ken_supp_prev
 
 
 ########################################################
@@ -6079,10 +6081,19 @@ cam_targeting_cluster = cam_targeting_individual %>%
 head(cam_targeting_cluster)
 
 # plot histogram of distribution of intervention need 
-ggplot(data = cam_targeting_cluster) +
-  geom_histogram(aes(x = fraction)) +
-  facet_wrap(vars(intervention), scales = "free") + theme_minimal() +
-  ggtitle("Cambodia")
+cam_supp_prev = ggplot(data = cam_targeting_cluster %>%
+                         mutate(pathogen = replace(pathogen, pathogen == "Plasmodium falciparum", "P. falciparum")) %>%
+                         mutate(pathogen = replace(pathogen, pathogen == "Plasmodium vivax", "P. vivax")) %>%
+                         mutate(pathogen = replace(pathogen, pathogen == "Strongyloides stercoralis", "S. stercoralis"))) +
+  geom_histogram(aes(x = fraction), fill = "lightskyblue3") +
+  facet_wrap(vars(pathogen), scales = "free") + theme_minimal() +
+  ggtitle("Cambodia") +ylab("Count") + xlab("Cluster-level prevalence")
+cam_supp_prev 
+
+#########################################################
+# Figure S2 individual level prevalences 
+
+plot_grid(bangl_supp_prev, cam_supp_prev, ken_supp_prev,ncol = 2, rel_heights = c(.7, .9))
 
 ########################################################
 # Join data together 
@@ -8878,9 +8889,1346 @@ fig3b
 
 plot_grid(fig3a, fig3b, ncol = 1)
 
+####################################################
+# supp analyses 
+
+# other goals 
+
+cluster_wide <- multipathogen_indices %>%
+  dplyr::select(location, spatial_cluster, pathogen, fraction) %>%
+  pivot_wider(names_from = pathogen, values_from = fraction, values_fill = 0)
+head(cluster_wide)
+
+min_clusters_to_threshold <- function(cluster_prev_sub, cluster_scores_sub,
+                                      rank_col, interventions_in_combo,
+                                      threshold = 0.50) {
+  
+  # Use fraction_rao for rao_quadratic, fraction for everything else
+  # frac_col <- if (rank_col == "rao_quadratic") "fraction_rao" else "fraction"
+  frac_col <- if (rank_col == "rao_quadratic") "fraction" else "fraction"
+  
+  total_burden <- cluster_prev_sub %>%
+    filter(pathogen %in% interventions_in_combo) %>%
+    group_by(pathogen) %>%
+    #  summarise(total = sum(.data[[frac_col]], na.rm = TRUE), .groups = "drop")
+    summarise(total = sum(.data[["num"]], na.rm = TRUE), .groups = "drop")
+  
+  
+  ranked_clusters <- cluster_scores_sub %>%
+    arrange(desc(.data[[rank_col]])) %>%
+    pull(spatial_cluster)
+  
+  cumulative <- tibble(pathogen = interventions_in_combo, cum_burden = 0)
+  
+  for (i in seq_along(ranked_clusters)) {
+    clust <- ranked_clusters[i]
+    this_cluster <- cluster_prev_sub %>%
+      filter(spatial_cluster == clust, pathogen %in% interventions_in_combo) %>%
+      dplyr::select(pathogen, all_of(frac_col), num) %>%
+      rename(frac_val = all_of(frac_col))
+    
+    cumulative <- cumulative %>%
+      left_join(this_cluster, by = "pathogen") %>%
+      # mutate(cum_burden = cum_burden + replace_na(frac_val, 0)) %>%
+      mutate(cum_burden = cum_burden + replace_na(num, 0)) %>%
+      dplyr::select(pathogen, cum_burden)
+    
+    pct_reached <- cumulative %>%
+      left_join(total_burden, by = "pathogen") %>%
+      mutate(pct = cum_burden / total)
+    
+    if (all(pct_reached$pct >= threshold)) {
+      return(tibble(n_clusters = i, rank_method = rank_col))
+    }
+  }
+  return(tibble(n_clusters = NA_integer_, rank_method = rank_col))
+}
+
+# run across all locations for combinations of pathogens with at least 3 intervetions 
+rank_methods <- c("shannon", "alpha_div", "gini_simpson", "rao_quadratic")
+
+library(purrr)
+results_all <- map_dfr(unique(multipathogen_indices$location), function(loc) {
+  
+  loc_data <- multipathogen_indices %>% filter(location == loc)
+  all_interventions <- unique(loc_data$pathogen)
+  n_interventions <- length(all_interventions)
+  
+  # All combinations of size 3 up to n_interventions
+  combos <- map(3:n_interventions, ~ combn(all_interventions, .x, simplify = FALSE)) %>%
+    flatten()
+  
+  map_dfr(combos, function(combo) {
+    combo_label <- paste(sort(combo), collapse = " + ")
+    
+    # Total clusters in location — calculated from full loc_data, not the combo subset
+    n_total_clusters <- n_distinct(loc_data$spatial_cluster)
+    
+    cluster_prev_sub <- loc_data %>% filter(pathogen %in% combo)
+    
+    # Recompute diversity scores for this combo only
+    cluster_scores_sub <- cluster_wide %>%
+      filter(location == loc) %>%
+      dplyr::select(spatial_cluster, any_of(combo)) %>%
+      rowwise() %>%
+      mutate(shannon      = shannon_entropy(c_across(all_of(combo))),
+             alpha_div    = alpha_diversity(c_across(all_of(combo))),
+             gini_simpson = gini_simpson(c_across(all_of(combo))),
+             rao_quadratic = rao_quadratic(c_across(all_of(combo)))  ) %>%
+      ungroup()
+    
+    n_total_clusters <- n_distinct(cluster_prev_sub$spatial_cluster)
+    
+    map_dfr(rank_methods, function(rm) {
+      res <- min_clusters_to_threshold(cluster_prev_sub      = cluster_prev_sub,
+                                       cluster_scores_sub    = cluster_scores_sub,
+                                       rank_col              = rm,
+                                       interventions_in_combo = combo )
+      res %>% mutate(location = loc,
+                     combo = combo_label,
+                     n_total_clusters = n_total_clusters,
+                     prop_clusters   = n_clusters / n_total_clusters )
+    })
+  })
+})
+
+head(results_all)
+
+# ---------------------------------------------------------------
+# Plot
+# ---------------------------------------------------------------
+
+method_labels <- c(shannon      = "Shannon diversity index",
+                   alpha_div    = "Alpha diversity",
+                   gini_simpson = "Gini-Simpson index",
+                   rao_quadratic = "Rao's quadratic index")
+library(forcats)
+summary_results_all = results_all %>%
+  group_by(rank_method, location) %>%
+  mutate(mean_clust = mean(prop_clusters)) %>%
+  ungroup() %>%
+  distinct(rank_method, location, mean_clust)
+
+
+sup50 = results_all %>%
+  mutate(rank_method = recode(rank_method, !!!method_labels)) %>%
+  mutate(rank_method = factor(rank_method, levels = c(
+    "Rao's quadratic index",
+    "Alpha diversity", 
+    "Shannon diversity index", 
+    "Gini-Simpson index"))) %>%
+  mutate(location = factor(location, levels = c("Bangladesh", "Kenya", "Cambodia"))) %>%
+  ggplot(aes(x = rank_method, y = prop_clusters, fill = rank_method)) +
+  geom_hline(yintercept = .50, col = "gray", lty = "dashed", lwd = 1.25) +
+  # stat_summary(fun = mean, geom = "bar", alpha = 0.7, width = 0.6) +
+  geom_boxplot() +
+  geom_jitter(width = 0.15, size = 2.5, alpha = 0.6, shape = 16) +
+  facet_wrap(vars(location), scales = "free_y") +
+  labs(
+    #title = "Proportion of clusters needed to reach 80% coverage",
+    x     = NULL,
+    y     = "Proportion of clusters to reach 50% coverage" ) + # to\nreac
+  theme_bw(base_size = 11) +
+  # theme_minimal() +
+  theme(legend.position = "botttom",
+        axis.text.x = element_text(angle = 30, hjust = 1)) +
+  coord_cartesian(ylim = c(0.25, .68)) +
+  scale_fill_viridis_d(option = "D" , end = .7 , name = "Strategy", alpha = .66) +
+  theme(
+    strip.text = element_text(size = 15),
+    plot.title = element_text(size = 14),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.title.x = element_text(size = 14), 
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14), 
+    legend.position = "bottom")  +
+  theme(strip.text = element_text(size = 16, colour = "black"),
+        strip.background = element_rect(fill = "white", colour = "black"),
+        plot.title = element_text(size = 14))
+sup50
+
+
+##### 90% 
+
+cluster_wide <- multipathogen_indices %>%
+  dplyr::select(location, spatial_cluster, pathogen, fraction) %>%
+  pivot_wider(names_from = pathogen, values_from = fraction, values_fill = 0)
+head(cluster_wide)
+
+min_clusters_to_threshold <- function(cluster_prev_sub, cluster_scores_sub,
+                                      rank_col, interventions_in_combo,
+                                      threshold = 0.90) {
+  
+  # Use fraction_rao for rao_quadratic, fraction for everything else
+  # frac_col <- if (rank_col == "rao_quadratic") "fraction_rao" else "fraction"
+  frac_col <- if (rank_col == "rao_quadratic") "fraction" else "fraction"
+  
+  total_burden <- cluster_prev_sub %>%
+    filter(pathogen %in% interventions_in_combo) %>%
+    group_by(pathogen) %>%
+    #  summarise(total = sum(.data[[frac_col]], na.rm = TRUE), .groups = "drop")
+    summarise(total = sum(.data[["num"]], na.rm = TRUE), .groups = "drop")
+  
+  
+  ranked_clusters <- cluster_scores_sub %>%
+    arrange(desc(.data[[rank_col]])) %>%
+    pull(spatial_cluster)
+  
+  cumulative <- tibble(pathogen = interventions_in_combo, cum_burden = 0)
+  
+  for (i in seq_along(ranked_clusters)) {
+    clust <- ranked_clusters[i]
+    this_cluster <- cluster_prev_sub %>%
+      filter(spatial_cluster == clust, pathogen %in% interventions_in_combo) %>%
+      dplyr::select(pathogen, all_of(frac_col), num) %>%
+      rename(frac_val = all_of(frac_col))
+    
+    cumulative <- cumulative %>%
+      left_join(this_cluster, by = "pathogen") %>%
+      # mutate(cum_burden = cum_burden + replace_na(frac_val, 0)) %>%
+      mutate(cum_burden = cum_burden + replace_na(num, 0)) %>%
+      dplyr::select(pathogen, cum_burden)
+    
+    pct_reached <- cumulative %>%
+      left_join(total_burden, by = "pathogen") %>%
+      mutate(pct = cum_burden / total)
+    
+    if (all(pct_reached$pct >= threshold)) {
+      return(tibble(n_clusters = i, rank_method = rank_col))
+    }
+  }
+  return(tibble(n_clusters = NA_integer_, rank_method = rank_col))
+}
+
+# run across all locations for combinations of pathogens with at least 3 intervetions 
+rank_methods <- c("shannon", "alpha_div", "gini_simpson", "rao_quadratic")
+
+library(purrr)
+results_all <- map_dfr(unique(multipathogen_indices$location), function(loc) {
+  
+  loc_data <- multipathogen_indices %>% filter(location == loc)
+  all_interventions <- unique(loc_data$pathogen)
+  n_interventions <- length(all_interventions)
+  
+  # All combinations of size 3 up to n_interventions
+  combos <- map(3:n_interventions, ~ combn(all_interventions, .x, simplify = FALSE)) %>%
+    flatten()
+  
+  map_dfr(combos, function(combo) {
+    combo_label <- paste(sort(combo), collapse = " + ")
+    
+    # Total clusters in location — calculated from full loc_data, not the combo subset
+    n_total_clusters <- n_distinct(loc_data$spatial_cluster)
+    
+    cluster_prev_sub <- loc_data %>% filter(pathogen %in% combo)
+    
+    # Recompute diversity scores for this combo only
+    cluster_scores_sub <- cluster_wide %>%
+      filter(location == loc) %>%
+      dplyr::select(spatial_cluster, any_of(combo)) %>%
+      rowwise() %>%
+      mutate(shannon      = shannon_entropy(c_across(all_of(combo))),
+             alpha_div    = alpha_diversity(c_across(all_of(combo))),
+             gini_simpson = gini_simpson(c_across(all_of(combo))),
+             rao_quadratic = rao_quadratic(c_across(all_of(combo)))  ) %>%
+      ungroup()
+    
+    n_total_clusters <- n_distinct(cluster_prev_sub$spatial_cluster)
+    
+    map_dfr(rank_methods, function(rm) {
+      res <- min_clusters_to_threshold(cluster_prev_sub      = cluster_prev_sub,
+                                       cluster_scores_sub    = cluster_scores_sub,
+                                       rank_col              = rm,
+                                       interventions_in_combo = combo )
+      res %>% mutate(location = loc,
+                     combo = combo_label,
+                     n_total_clusters = n_total_clusters,
+                     prop_clusters   = n_clusters / n_total_clusters )
+    })
+  })
+})
+
+head(results_all)
+
+# ---------------------------------------------------------------
+# Plot
+# ---------------------------------------------------------------
+
+method_labels <- c(shannon      = "Shannon diversity index",
+                   alpha_div    = "Alpha diversity",
+                   gini_simpson = "Gini-Simpson index",
+                   rao_quadratic = "Rao's quadratic index")
+library(forcats)
+summary_results_all = results_all %>%
+  group_by(rank_method, location) %>%
+  mutate(mean_clust = mean(prop_clusters)) %>%
+  ungroup() %>%
+  distinct(rank_method, location, mean_clust)
+
+
+sup90 = results_all %>%
+  mutate(rank_method = recode(rank_method, !!!method_labels)) %>%
+  mutate(rank_method = factor(rank_method, levels = c(
+    "Rao's quadratic index",
+    "Alpha diversity", 
+    "Shannon diversity index", 
+    "Gini-Simpson index"))) %>%
+  mutate(location = factor(location, levels = c("Bangladesh", "Kenya", "Cambodia"))) %>%
+  ggplot(aes(x = rank_method, y = prop_clusters, fill = rank_method)) +
+  geom_hline(yintercept = .90, col = "gray", lty = "dashed", lwd = 1.25) +
+  # stat_summary(fun = mean, geom = "bar", alpha = 0.7, width = 0.6) +
+  geom_boxplot() +
+  geom_jitter(width = 0.15, size = 2.5, alpha = 0.6, shape = 16) +
+  facet_wrap(vars(location), scales = "free_y") +
+  labs(
+    #title = "Proportion of clusters needed to reach 80% coverage",
+    x     = NULL,
+    y     = "Proportion of clusters to reach 90% coverage" ) + # to\nreac
+  theme_bw(base_size = 11) +
+  # theme_minimal() +
+  theme(legend.position = "botttom",
+        axis.text.x = element_text(angle = 30, hjust = 1)) +
+  coord_cartesian(ylim = c(0.70, .95)) +
+  scale_fill_viridis_d(option = "D" , end = .7 , name = "Strategy", alpha = .66) +
+  theme(
+    strip.text = element_text(size = 15),
+    plot.title = element_text(size = 14),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.title.x = element_text(size = 14), 
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14), 
+    legend.position = "bottom")  +
+  theme(strip.text = element_text(size = 16, colour = "black"),
+        strip.background = element_rect(fill = "white", colour = "black"),
+        plot.title = element_text(size = 14))
+sup90
+
+plot_grid(sup50, sup90, ncol = 1)
+
+
+########################################
+# bootstrapped uncertainty 
+
+
+# ── Step 1: Bootstrap function ────────────────────────────────────────────────
+# For each location, resample spatial clusters WITH replacement (same n as
+# original), recompute the "clusters to reach 80% coverage" proportion for
+# every pathogen x strategy combination, repeat many times.
+
+bootstrap_clusters_80 <- function(n_boot = 100) {
+  
+  map_dfr(unique(best_combos$location), function(loc) {
+    
+    best               <- best_combos %>% filter(location == loc)
+    combo_label        <- best$combo[[1]]
+    pathogens_in_combo <- str_split(combo_label, " \\+ ")[[1]]
+    
+    all_clusters <- cluster_by_pathogen %>%
+      filter(location == loc) %>%
+      pull(spatial_cluster) %>%
+      unique()
+    
+    n_clusters <- length(all_clusters)
+    
+    rao_order_full   <- rao_ranking_pathogen   %>% filter(location == loc) %>% arrange(rank_rao)   %>% pull(spatial_cluster)
+    single_order_full<- single_pathogen_ranking%>% filter(location == loc) %>% arrange(rank_single) %>% pull(spatial_cluster)
+    mpi_order_full   <- mpi_ranking            %>% filter(location == loc) %>% arrange(rank_mpi)    %>% pull(spatial_cluster)
+    
+    path_data_full <- cluster_by_pathogen %>%
+      filter(location == loc, pathogen %in% pathogens_in_combo)
+    
+    map_dfr(1:n_boot, function(b) {
+      
+      # Resample clusters WITH replacement, same n as original
+      boot_clusters <- sample(all_clusters, size = n_clusters, replace = TRUE)
+      
+      # Re-derive each strategy's order, restricted to (duplicated) resampled clusters
+      # Order is preserved from the original ranking, just filtered/expanded to the boot sample
+      rao_order    <- boot_clusters[order(match(boot_clusters, rao_order_full))]
+      single_order <- boot_clusters[order(match(boot_clusters, single_order_full))]
+      mpi_order    <- boot_clusters[order(match(boot_clusters, mpi_order_full))]
+      
+      path_data <- path_data_full %>%
+        filter(spatial_cluster %in% boot_clusters)
+      
+      map_dfr(unique(path_data$pathogen), function(path) {
+        
+        p_data <- path_data %>% filter(pathogen == path)
+        
+        # total_need recomputed on the bootstrap sample (with duplicates weighted by count)
+        cluster_counts <- table(boot_clusters)
+        
+        total_need <- sum(p_data$num[match(names(cluster_counts), p_data$spatial_cluster)] *
+                            as.numeric(cluster_counts), na.rm = TRUE)
+        
+        get_cum_fraction <- function(order_vec) {
+          cum <- map_dbl(seq_along(order_vec), function(i) {
+            included <- order_vec[1:i]
+            counts_i <- table(included)
+            sum(p_data$num[match(names(counts_i), p_data$spatial_cluster)] *
+                  as.numeric(counts_i), na.rm = TRUE)
+          })
+          frac <- cum / total_need
+          first_80 <- which(frac >= 0.80)[1]
+          if (is.na(first_80)) NA_real_ else first_80 / n_clusters
+        }
+        
+        tibble(
+          location = loc, pathogen = path, boot_id = b,
+          prop_80_rao    = get_cum_fraction(rao_order),
+          prop_80_single = get_cum_fraction(single_order),
+          prop_80_mpi    = get_cum_fraction(mpi_order)
+        )
+      })
+    })
+  })
+}
+
+# Run bootstrap (500 iterations -- adjust down to 100-200 first to test speed,
+# this can be slow given the nested cumulative sum logic)
+#set.seed(42)
+boot_results <- bootstrap_clusters_80(n_boot = 100)
+
+# ── Step 2: Summarize into median + 95% CI per pathogen x strategy ───────────
+boot_summary <- boot_results %>%
+  pivot_longer(cols = starts_with("prop_80_"),
+               names_to = "strategy_key", values_to = "prop_clusters_80") %>%
+  mutate(strategy = case_when(
+    strategy_key == "prop_80_rao"    ~ "Rao's quadratic index",
+    strategy_key == "prop_80_single" ~ "Vaccine only",
+    strategy_key == "prop_80_mpi"    ~ "Wealth"
+  )) %>%
+  filter(!is.na(prop_clusters_80)) %>%
+  group_by(location, pathogen, strategy) %>%
+  summarise(
+    median_80 = quantile(prop_clusters_80, 0.50),
+    lower_80  = quantile(prop_clusters_80, 0.025),
+    upper_80  = quantile(prop_clusters_80, 0.975),
+    .groups = "drop"
+  )
+
+head(boot_summary)
+
+# ── Step 3: Join with pathogen ordering/renaming from your existing pipeline ──
+boot_summary_ordered <- boot_summary %>%
+  left_join(vaccine_order, by = c("location", "pathogen")) %>%
+  mutate(pathogen = replace(pathogen, pathogen == "Trichuris", "T. trichiura"),
+         pathogen = replace(pathogen, pathogen == "Plasmodium falciparum", "P. falciparum"),
+         pathogen = replace(pathogen, pathogen == "Plasmodium vivax", "P. vivax"),
+         pathogen = replace(pathogen, pathogen == "Ascaris", "A. lumbricoides"),
+         pathogen = replace(pathogen, pathogen == "Strongyloides stercoralis", "S. stercoralis")) %>%
+  group_by(location) %>%
+  mutate(pathogen_ordered = reorder(pathogen, vaccine_val)) %>%
+  ungroup()
+
+# ── Step 4: Plot with dodged points + error bars ─────────────────────────────
+boot_build <- ggplot(boot_summary_ordered %>%
+                        mutate(location = factor(location, levels = c("Bangladesh", "Kenya", "Cambodia"))),
+                      aes(x = pathogen_ordered, y = median_80, color = strategy)) +
+  geom_errorbar(aes(ymin = lower_80, ymax = upper_80),
+                width = 0.25, lwd = 0.9,
+                position = position_dodge(width = 0.6)) +
+  geom_point(size = 4, shape = 16,
+             position = position_dodge(width = 0.6)) +
+  facet_wrap(vars(location), scales = "free_x") +
+  scale_color_manual(
+    values = c("Rao's quadratic index" = "#440154FF",
+               "Vaccine only"          = "cornflowerblue",
+               "Wealth"                = "orangered"),
+    name = "Strategy") +
+  geom_hline(yintercept = 0.80, linetype = "dashed", color = "gray") +
+  labs(x = "Pathogen", y = "Proportion of clusters to reach 80% coverage") +
+  theme_bw(base_size = 11) +
+  theme(axis.text.x      = element_text(angle = 35, hjust = 1, size = 12),
+        axis.text.y      = element_text(size = 12),
+        axis.title       = element_text(size = 15),
+        legend.text      = element_text(size = 13),
+        legend.title     = element_text(size = 14),
+        legend.position  = "bottom",
+        panel.spacing.x  = unit(1.15, "cm"),
+        strip.background = element_rect(fill = "white", colour = "black"),
+        strip.text       = element_text(size = 16))
+boot_build 
+
+
+
+
+############################ try to predict ind level rao 
+library(BART)
+# join to Rao
+rao_mpi = left_join(mpi_all_locations, rao_by_cluster, by = c("location", "spatial_cluster")) %>%
+  group_by(location) %>%
+  mutate(max_mpi = max(mpi, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(mpi_standard = mpi/max_mpi)
+head(rao_mpi)
+
+
+################################################################
+####################################################################
+# BART models with permutation-based variable importance threshold
+####################################################################
+
+# ── Helper function: permutation test for variable importance ────────────────
+# Shuffles the outcome, refits BART, and records importance under the null.
+# Returns the 95th percentile of null importance for EACH variable, which
+# accounts for variables having different numbers of split points
+# (continuous variables get more candidate splits than binary indicators).
+
+permutation_importance_threshold <- function(predictors, outcome, n_perms = 50,
+                                             ndpost = 200, nskip = 100) {
+  null_importance <- matrix(NA, nrow = n_perms, ncol = ncol(predictors))
+  colnames(null_importance) <- colnames(predictors)
+  
+  for (p in 1:n_perms) {
+    outcome_shuffled <- sample(outcome)
+    
+    fit_null <- wbart(x.train = predictors,
+                      y.train = outcome_shuffled,
+                      ndpost  = ndpost,
+                      nskip   = nskip,
+                      printevery = 0)
+    
+    null_importance[p, ] <- colMeans(fit_null$varcount / rowSums(fit_null$varcount))
+  }
+  
+  null_importance
+}
+
+# ── Helper function: build the variable importance plot ─────────────────────
+plot_var_importance <- function(var_importance, location_name, rank_cor) {
+  ggplot(var_importance, aes(x = observed_importance, y = variable)) + 
+    #    fill = exceeds_null)) +
+    geom_col(alpha = 0.35, fill = "orangered") +
+    #   geom_errorbar(aes(xmin = null_95th_percentile, xmax = null_95th_percentile),
+    #                width = 0.4, color = "black", linewidth = 0.6) +
+    # scale_fill_manual(#values = c("TRUE" = "darkmagenta", "FALSE" = "gray70"),
+    #              aesfill = "orangered") + 
+    #   name = "Above chance\nthreshold") +
+    theme_bw(base_size = 13) +
+    labs(x = "Variable inclusion proportion", y = NULL,
+         title = paste0(location_name),
+         subtitle = paste0("ρ = ",
+                           round(rank_cor, 2))) +
+    theme(plot.title    = element_text(size = 14),
+          plot.subtitle = element_text(size = 12),
+          axis.text.y   = element_text(size = 12),
+          legend.position = "bottom")
+}
+
+####################################################################
+# KENYA
+####################################################################
+place_clim <- readr::read_csv(file = here("data", "place_loc_climate.csv")) %>%
+  mutate(lat = round(lat, 5), long = round(long, 5))
+
+             
+pred_rao_kenya <- kenya_meta %>%
+  left_join(child_death, by = "hhid") %>%
+  left_join(block_kenya, by = c("block", "clusterid")) %>%
+  mutate(nutrition_deprived = ifelse(HHS_bi == 1, 1, 0)) %>%
+  mutate(hygiene_deprived = ifelse(hws_bl == 1 | tr %in% c("Handwashing", "WSH"), 0, 1)) %>%
+  mutate(mat_edu_deprived = ifelse(mother_edu == 0, 1, 0)) %>%
+  mutate(sanitation_deprived = ifelse(imp_lat_el == 0 | tr == "WSH", 1, 0)) %>%
+  mutate(water_deprived = ifelse(prim_drink_ws_bl == 1 & water_time < 31 | tr == "WSH", 0, 1)) %>%
+  mutate(across(roof:car, ~replace(., . > 8, NA))) %>%
+  mutate(electricity_deprived = ifelse(elec == 1, 0, 1)) %>%
+  mutate(cooking_deprived = ifelse(cooker == 1, 0, 1)) %>%
+  mutate(floor_deprived = ifelse(floor == 0, 1, 0)) %>%
+  mutate(housing_deprived = ifelse(roof == 1 | floor == 1 | walls == 1, 0, 1)) %>%
+  mutate(asset_count = radio + tv + mobilephone + bicycle + car + motorcycle) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  mutate(animal_ownership = ifelse(poultry > 0 | cow > 0 | goat > 0, 1, 0)) %>%
+  group_by(block) %>%
+  summarize(across(nutrition_deprived:animal_ownership, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(spatial_cluster = block, location = "Kenya") %>%
+  dplyr::select(-block) %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  mutate(lat = round(as.numeric(lat), 5), long = round(as.numeric(long), 5)) %>%
+  left_join(place_clim, by = c("location", "lat", "long")) %>%
+  drop_na()
+head(pred_rao_kenya)
+
+predictors <- pred_rao_kenya %>%
+  dplyr::select(nutrition_deprived:housing_deprived, assets_deprived, animal_ownership, mpi_standard, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+head(predictors)
+colnames(predictors) = c("Food security", "Hygiene", "Maternal education", "Sanitation", "Drinking water",
+                         "Electricity", "Cooking",  "Flooring", "Housing Material", "Assets", "Animal Ownership" ,"Poverty",
+                         "Temperature", "Precipitation")
+head(predictors)
+
+outcome <- log(pred_rao_kenya$rao + .001)
+
+# ── K-fold CV ──────────────────────────────────────────────────────────────
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+cv_preds <- numeric(nrow(predictors))
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x, y.train = train_y, x.test = test_x,
+               ndpost = 1000, nskip = 250, printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- round(1 - (ss_res / ss_tot), digits = 3)
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+
+# ── Fig 1: Observed vs predicted ─────────────────────────────────────────────
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit_kenya <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Kenya", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1)) + xlim(c(0,1))
+fig_fit_kenya
+
+# ── Full model + permutation-based importance threshold ─────────────────────
+fit_full <- wbart(x.train = predictors, y.train = outcome,
+                  ndpost = 1000, nskip = 250, printevery = 0)
+
+observed_importance <- colMeans(fit_full$varcount / rowSums(fit_full$varcount))
+
+null_importance_kenya <- permutation_importance_threshold(predictors, outcome, n_perms = 50)
+null_95th_kenya <- apply(null_importance_kenya, 2, quantile, 0.95)
+
+var_importance_kenya <- tibble(
+  variable             = colnames(predictors),
+  observed_importance  = observed_importance,
+  null_95th_percentile = null_95th_kenya
+) %>%
+  mutate(exceeds_null = observed_importance > null_95th_percentile) %>%
+  arrange(observed_importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+fig_varimp_kenya <- plot_var_importance(var_importance_kenya, "Kenya", rank_cor)
+fig_varimp_kenya
+
+
+####################################################################
+# BANGLADESH
+####################################################################
+gps_dat <- read_dta(file = here("data/bangl/gps/untouched", "6. WASHB_Baseline_gps.dta")) %>%
+  mutate(dataid = as.numeric(dataid)) %>%
+  left_join(public_ids, by = "dataid") %>%
+  dplyr::select(block, block_r, qgpslong, qgpslat) %>%
+  group_by(block) %>%
+  mutate(med_qgpslong = median(qgpslong), med_qgpslat = median(qgpslat)) %>%
+  distinct(block, block_r, med_qgpslong, med_qgpslat)
+
+pred_rao_bangl <- bangl_metadata %>%
+  left_join(treatment_bangl, by = c("clusterid", "block")) %>%
+  mutate(nutrition_deprived = ifelse(hfiacat == "Food Secure", 0, 1)) %>%
+  mutate(mat_edu_deprived  = ifelse(momedu == "Secondary (>5y)", 0, 1)) %>%
+  mutate(sanitation_deprived = ifelse(latown == 1 & latseal == 1 & latfeces == 1 | tr %in% c("Sanitation", "WSH"), 0, 1)) %>%
+  mutate(water_deprived = ifelse(tubewell == 1 & watmin < 30 | tr %in% c("Water", "WSH"), 0, 1)) %>%
+  mutate(hygiene_deprived = ifelse(hwsws == 1 | tr %in% c("Handwashing", "WSH"), 0, 1)) %>%
+  mutate(floor_deprived = ifelse(cement == 0, 1, 0)) %>%
+  mutate(electricity_deprived = ifelse(elec == 1, 0, 1)) %>%
+  mutate(housing_deprived = ifelse(roof == 1 | floor == 1 | walls == 1, 0, 1)) %>%
+  mutate(asset_count = rowSums(across(asset_radio:asset_refrig), na.rm = TRUE)) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  group_by(block) %>%
+  summarize(across(nutrition_deprived:assets_deprived, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(block_r = block) %>% dplyr::select(-block) %>%
+  left_join(gps_dat, by = "block_r") %>%
+  mutate(spatial_cluster = block) %>%
+  mutate(location = "Bangladesh") %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  mutate(lat = round(lat, 5), long = round(long, 5)) %>%
+  left_join(place_clim %>% mutate(lat = round(lat, 5), long = round(long, 5)),
+            by = c("location", "lat", "long")) %>%
+  drop_na() 
+
+predictors <- pred_rao_bangl %>%
+  dplyr::select(nutrition_deprived:housing_deprived, assets_deprived, mpi_standard, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+head(predictors)
+colnames(predictors) = c("Food security", "Maternal education", "Sanitation", "Drinking water", "Hygiene",
+                         "Flooring", "Electricity", "Housing Material", "Assets", "Poverty",
+                         "Temperature", "Precipitation")
+head(predictors)
+
+outcome <- log(pred_rao_bangl$rao)
+
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+cv_preds <- numeric(nrow(predictors))
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x, y.train = train_y, x.test = test_x,
+               ndpost = 2000, nskip = 250, printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- round(1 - (ss_res / ss_tot), digits = 3)
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit_bangl <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Bangladesh", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1)) + xlim(c(0,1))
+fig_fit_bangl
+
+fit_full <- wbart(x.train = predictors, y.train = outcome,
+                  ndpost = 1000, nskip = 250, printevery = 0)
+
+observed_importance <- colMeans(fit_full$varcount / rowSums(fit_full$varcount))
+
+null_importance_bangl <- permutation_importance_threshold(predictors, outcome, n_perms = 50)
+null_95th_bangl <- apply(null_importance_bangl, 2, quantile, 0.95)
+
+var_importance_bangl <- tibble(
+  variable             = colnames(predictors),
+  observed_importance  = observed_importance,
+  null_95th_percentile = null_95th_bangl
+) %>%
+  mutate(exceeds_null = observed_importance > null_95th_percentile) %>%
+  arrange(observed_importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+fig_varimp_bangl <- plot_var_importance(var_importance_bangl, "Bangladesh", rank_cor)
+fig_varimp_bangl
+
+
+####################################################################
+# CAMBODIA
+####################################################################
+gps_cambodia <- readr::read_csv(file = here("projects/6-multipathogen-burden/data/cambodia", "cambodia_ea_dhs.csv"))
+gps_dat_cam <- cambodia_serology %>%
+  dplyr::select(dhsclust, psuid) %>% distinct()
+
+predict_rao_cam <- cam_wealth_data %>%
+  mutate(nutrition_deprived = ifelse(is.na(ha40), NA, ifelse(ha40 < 1850, 1, 0))) %>%
+  mutate(mortality = ifelse(is.na(hv111), NA, ifelse(hv111 == 0, 1, 0))) %>%
+  mutate(mat_edu_deprived = ifelse(is.na(ha67), NA,
+                                   ifelse(ha67 == 99, NA, ifelse(ha67 == 0 | ha67 == 1, 1, 0)))) %>%
+  mutate(cooking_deprived = ifelse(hv226 %in% c(6,7,8,9,10,11), 1, 0)) %>%
+  mutate(sanitation_deprived = case_when(
+    hv205 %in% c(15,23,31,41,42,43) ~ 1,
+    hv205 != 99 & hv225 == 1 ~ 1,
+    hv205 != 99 & hv225 == 0 ~ 0,
+    TRUE ~ NA_real_)) %>%
+  mutate(sh104 = replace(sh104, sh104 > 900, NA), sh104b = replace(sh104b, sh104b > 900, NA)) %>%
+  mutate(water_deprived = case_when(
+    hv237 == 0 ~ 1,
+    hv237 == 1 & sh104  > 30 ~ 1,
+    hv237 == 1 & sh104b > 30 ~ 1,
+    hv237 == 1 ~ 0,
+    TRUE ~ NA_real_)) %>%
+  mutate(hygiene_deprived = ifelse(sh138 == 1 & sh139a == 1, 0, 1)) %>%
+  mutate(floor_deprived = ifelse(hv123 == 1, 0, 1)) %>%
+  mutate(hv206 = replace(hv206, hv206 > 2, NA)) %>%
+  mutate(electricity_deprived = ifelse(hv206 == 0, 1, 0)) %>%
+  mutate(housing_deprived = case_when(
+    hv213 %in% c(11,21) |
+      hv214 %in% c(11,12,13,21,22,23) |
+      hv215 %in% c(11,12,21,22,23,24) ~ 1,
+    hv213 == 96 | hv214 %in% c(96,99) | hv215 %in% c(96,99) ~ NA_real_,
+    TRUE ~ 0)) %>%
+  mutate(asset_count = hv208 + hv209 + hv210 + hv211 + hv212 + hv221 + hv243c, na.rm = TRUE) %>%
+  mutate(assets_deprived = ifelse(asset_count <= 1, 1, 0)) %>%
+  mutate(dhsclust = hv001) %>%
+  left_join(gps_dat_cam, by = "dhsclust") %>%
+  mutate(psuid = psuid + 1) %>%
+  mutate(spatial_cluster = psuid) %>% mutate(Location = "Cambodia") %>% dplyr::select(-psuid) %>%
+  mutate(floor_deprived = housing_deprived) %>%
+  group_by(spatial_cluster) %>%
+  summarize(across(nutrition_deprived:assets_deprived, ~mean(.x, na.rm = TRUE))) %>%
+  ungroup() %>%
+  mutate(location = "Cambodia") %>%
+  left_join(rao_mpi, by = c("location", "spatial_cluster")) %>%
+  mutate(lat = round(lat, 5), long = round(long, 5)) %>%
+  left_join(place_clim %>% mutate(lat = round(lat, 5), long = round(long, 5)),
+            by = c("location", "lat", "long")) %>%
+  drop_na()
+
+cam_distances <- readr::read_csv(file = here("data/cambodia", "healthcare_dist_cambodia_with_distances.csv")) %>%
+  mutate(spatial_cluster = psuid) %>%
+  left_join(predict_rao_cam, by = "spatial_cluster") %>%
+  drop_na()
+
+predictors <- cam_distances %>%
+  dplyr::select(nutrition_deprived, hygiene_deprived, mat_edu_deprived,
+                sanitation_deprived, water_deprived, electricity_deprived,
+                cooking_deprived, floor_deprived, housing_deprived,
+                assets_deprived, mpi_standard, distance_km, mean_temp_C, annual_precip_mm) %>%
+  as.matrix()
+head(predictors)
+colnames(predictors) = c("Food security", "Hygiene", "Education", "Sanitation", "Drinking water", 
+                         "Electricity", "Cooking", "Flooring", "Housing Material", "Assets", "Poverty",
+                         "Healthcare proximity", "Temperature", "Precipitation")
+head(predictors)
 
 
 
 
 
 
+outcome <- log(cam_distances$rao + .001)
+
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(predictors)))
+cv_preds <- numeric(nrow(predictors))
+
+for (i in 1:k) {
+  train_x <- predictors[folds != i, ]
+  train_y <- outcome[folds != i]
+  test_x  <- predictors[folds == i, ]
+  
+  fit <- wbart(x.train = train_x, y.train = train_y, x.test = test_x,
+               ndpost = 2000, nskip = 250, printevery = 0)
+  
+  cv_preds[folds == i] <- fit$yhat.test.mean
+}
+
+mae  <- mean(abs(outcome - cv_preds))
+rmse <- sqrt(mean((outcome - cv_preds)^2))
+ss_res <- sum((outcome - cv_preds)^2)
+ss_tot <- sum((outcome - mean(outcome))^2)
+r2 <- round(1 - (ss_res / ss_tot), digits = 3)
+rank_cor <- cor(outcome, cv_preds, method = "spearman")
+
+cv_df <- tibble(observed = outcome, predicted = cv_preds)
+
+fig_fit_cambo <- ggplot(cv_df, aes(x = exp(observed), y = exp(predicted))) +
+  geom_point(alpha = 0.7, color = "gray20", size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "darkmagenta", lwd = 1) +
+  theme_bw(base_size = 13) +
+  labs(x = "Observed Rao's index", y = "Predicted Rao's index",
+       title = "Cambodia", subtitle = paste0("R^2 = ", r2)) +
+  theme(plot.title = element_text(size = 14)) +
+  ylim(c(0,1)) + xlim(c(0,1))
+fig_fit_cambo
+
+fit_full <- wbart(x.train = predictors, y.train = outcome,
+                  ndpost = 1000, nskip = 250, printevery = 0)
+
+observed_importance <- colMeans(fit_full$varcount / rowSums(fit_full$varcount))
+
+null_importance_cambo <- permutation_importance_threshold(predictors, outcome, n_perms = 50)
+null_95th_cambo <- apply(null_importance_cambo, 2, quantile, 0.95)
+
+var_importance_cambo <- tibble(
+  variable             = colnames(predictors),
+  observed_importance  = observed_importance,
+  null_95th_percentile = null_95th_cambo
+) %>%
+  mutate(exceeds_null = observed_importance > null_95th_percentile) %>%
+  arrange(observed_importance) %>%
+  mutate(variable = factor(variable, levels = variable))
+
+fig_varimp_cambo <- plot_var_importance(var_importance_cambo, "Cambodia", rank_cor)
+fig_varimp_cambo
+
+
+# combine 
+
+fig3b_build = plot_grid(fig_varimp_bangl, fig_varimp_kenya, fig_varimp_cambo, ncol = 3) 
+fig3b_build 
+
+fig3b <- fig3b_build +
+  labs(tag = "B") +
+  theme(plot.tag = element_text(size = 20, face = "bold"))
+fig3b
+
+
+
+################################################# 
+# try something simpler 
+
+library(tidyverse)
+
+# ── Step 1: Function to create Rao tertiles and test variable association ────
+build_tertile_comparison <- function(data, predictor_cols, location_name) {
+  
+  data_tertile <- data %>%
+    mutate(rao_tertile = ntile(rao, 3)) %>%
+    mutate(rao_tertile = factor(rao_tertile, levels = 1:3)) %>%
+    # Standardize all predictor columns to mean 0, sd 1 before computing eta-squared
+    mutate(across(all_of(predictor_cols), ~ as.numeric(scale(.x))))
+  
+  variable_effect_sizes <- map_dfr(predictor_cols, function(var) {
+    
+    formula_str <- paste0(var, " ~ rao_tertile")
+    aov_fit <- aov(as.formula(formula_str), data = data_tertile)
+    aov_summary <- summary(aov_fit)[[1]]
+    
+    ss_between <- aov_summary["rao_tertile", "Sum Sq"]
+    ss_total   <- sum(aov_summary[["Sum Sq"]])
+    eta_sq     <- ss_between / ss_total
+    
+    tibble(variable = var, eta_squared = eta_sq)
+  })
+  
+  top4_vars <- variable_effect_sizes %>%
+    arrange(desc(eta_squared)) %>%
+    slice_head(n = 5) %>%
+    pull(variable)
+  
+  # IMPORTANT: keep the ORIGINAL (unscaled) data for plotting, just use
+  # standardized values for ranking
+  list(data = data %>% mutate(rao_tertile = ntile(rao, 3), 
+                              rao_tertile = factor(rao_tertile, levels = 1:3)),
+       top4 = top4_vars, 
+       effect_sizes = variable_effect_sizes)
+}
+
+
+# ── Step 2: Build the boxplot for the top 4 variables ─────────────────────────
+
+plot_tertile_boxplots <- function(tertile_result, location_name) {
+  
+  plot_data <- tertile_result$data %>%
+    dplyr::select(rao_tertile, all_of(tertile_result$top4)) %>%
+    pivot_longer(cols = -rao_tertile, names_to = "variable", values_to = "value") %>%
+    mutate(variable = factor(variable, levels = tertile_result$top4))
+  
+  ggplot(plot_data, aes(x = variable, y = value*100, fill = rao_tertile)) +
+    geom_boxplot(outlier.size = 1.5, position = position_dodge(width = 0.8), width = 0.7) +
+    scale_fill_manual(values = c("1" = "#2D1160", "2" = "#A63A6E", "3" = "#F4A862"),
+                      name = "Rao's quadratic\nindex") +
+    theme_bw(base_size = 13) +
+    labs(x = "Risk factor", y = "Cluster-level deprivation (%)", title = location_name) +
+    theme(plot.title       = element_text(size = 16, hjust = 0.5),
+          axis.text.x      = element_text(size = 13),
+          axis.title.x     = element_text(size = 15),
+          legend.position  = "bottom",
+          legend.title     = element_text(size = 11),
+          legend.text      = element_text(size = 11),
+          panel.grid.minor = element_blank())
+}
+
+# ── Apply to Kenya ─────────────────────────────────────────────────────────────
+kenya_predictor_cols <- c("nutrition_deprived", "hygiene_deprived", "mat_edu_deprived",
+                          "sanitation_deprived", "water_deprived", "electricity_deprived",
+                          "cooking_deprived", "floor_deprived", "housing_deprived",
+                          "assets_deprived", "animal_ownership", "mpi_standard",
+                          "mean_temp_C", "annual_precip_mm")
+
+kenya_tertiles <- build_tertile_comparison(pred_rao_kenya %>% 
+                                             mutate(annual_precip_mm = annual_precip_mm/max(annual_precip_mm)), kenya_predictor_cols, "Kenya")
+fig_tertile_kenya <- plot_tertile_boxplots(kenya_tertiles, "Kenya")
+fig_tertile_kenya
+
+# ── Apply to Bangladesh ─────────────────────────────────────────────────────────
+bangl_predictor_cols <- c("nutrition_deprived", "mat_edu_deprived", "sanitation_deprived",
+                          "water_deprived", "hygiene_deprived", "floor_deprived",
+                          "electricity_deprived", "housing_deprived", "assets_deprived",
+                          "mpi_standard", "mean_temp_C", "annual_precip_mm")
+
+bangl_tertiles <- build_tertile_comparison(pred_rao_bangl %>% 
+                                             mutate(annual_precip_mm = (annual_precip_mm - min(annual_precip_mm)) / 
+                                                      (max(annual_precip_mm) - min(annual_precip_mm))) %>%
+                                             mutate(mean_temp_C = (mean_temp_C - min(mean_temp_C)) / 
+                                                      (max(mean_temp_C) - min(mean_temp_C))),
+                                                    bangl_predictor_cols, "Bangladesh" )
+fig_tertile_bangl <- plot_tertile_boxplots(bangl_tertiles, "Bangladesh")
+fig_tertile_bangl
+
+# ── Apply to Cambodia ─────────────────────────────────────────────────────────
+cam_predictor_cols <- c("nutrition_deprived", "hygiene_deprived", "mat_edu_deprived",
+                        "sanitation_deprived", "water_deprived", "electricity_deprived",
+                        "cooking_deprived", "floor_deprived", "housing_deprived",
+                        "assets_deprived", "mpi_standard", "distance_km",
+                        "mean_temp_C", "annual_precip_mm")
+
+cam_tertiles <- build_tertile_comparison(cam_distances, cam_predictor_cols, "Cambodia")
+fig_tertile_cambo <- plot_tertile_boxplots(cam_tertiles, "Cambodia")
+fig_tertile_cambo
+
+
+# ── Create a lookup table mapping raw column names to display names, per location ──
+
+kenya_name_map <- c(
+  nutrition_deprived   = "Food security",
+  hygiene_deprived     = "Hygiene",
+  mat_edu_deprived     = "Maternal education",
+  sanitation_deprived  = "Sanitation",
+  water_deprived       = "Drinking water",
+  electricity_deprived = "Electricity",
+  cooking_deprived     = "Cooking",
+  floor_deprived       = "Flooring",
+  housing_deprived     = "Housing Material",
+  assets_deprived      = "Assets",
+  animal_ownership     = "Animal Ownership",
+  mpi_standard         = "Poverty",
+  mean_temp_C          = "Temperature",
+  annual_precip_mm     = "Precipitation"
+)
+
+bangl_name_map <- c(
+  nutrition_deprived   = "Food security",
+  mat_edu_deprived     = "Maternal education",
+  sanitation_deprived  = "Sanitation",
+  water_deprived       = "Drinking water",
+  hygiene_deprived     = "Hygiene",
+  floor_deprived       = "Flooring",
+  electricity_deprived = "Electricity",
+  housing_deprived     = "Housing Material",
+  assets_deprived      = "Assets",
+  mpi_standard         = "Poverty",
+  mean_temp_C          = "Temperature",
+  annual_precip_mm     = "Precipitation"
+)
+
+cam_name_map <- c(
+  nutrition_deprived   = "Food security",
+  hygiene_deprived     = "Hygiene",
+  mat_edu_deprived     = "Education",
+  sanitation_deprived  = "Sanitation",
+  water_deprived       = "Drinking water",
+  electricity_deprived = "Electricity",
+  cooking_deprived     = "Cooking",
+  floor_deprived       = "Flooring",
+  housing_deprived     = "Housing Material",
+  assets_deprived      = "Assets",
+  mpi_standard         = "Poverty",
+  distance_km          = "Healthcare proximity",
+  mean_temp_C          = "Temperature",
+  annual_precip_mm     = "Precipitation"
+)
+
+# ── Updated plot function: takes a name_map argument and relabels the x-axis ──
+
+plot_tertile_boxplots <- function(tertile_result, location_name, name_map) {
+  
+  plot_data <- tertile_result$data %>%
+    dplyr::select(rao_tertile, all_of(tertile_result$top4)) %>%
+    pivot_longer(cols = -rao_tertile, names_to = "variable", values_to = "value") %>%
+    mutate(variable = recode(variable, !!!name_map)) %>%      # relabel using the map
+    mutate(variable = factor(variable, levels = name_map[tertile_result$top4]))  # preserve top4 order
+  
+  ggplot(plot_data, aes(x = variable, y = value*100, fill = rao_tertile)) +
+    geom_boxplot(outlier.size = 1.5, position = position_dodge(width = 0.8), width = 0.7) +
+    scale_fill_manual(values = c("1" = "#2D1160", "2" = "#A63A6E", "3" = "#F4A862"),
+                      name = "Rao's quadratic\nindex") +
+    theme_bw(base_size = 13) +
+    labs(x = "Environmental/household risk factor", y = "Cluster-level condition (%)", title = location_name) +
+    theme(plot.title       = element_text(size = 16, hjust = 0.5),
+          axis.text.x      = element_text(size = 11),
+          axis.title.x     = element_text(size = 15),
+          legend.position  = "bottom",
+          legend.title     = element_text(size = 11),
+          legend.text      = element_text(size = 11),
+          panel.grid.minor = element_blank())
+}
+
+# ── Apply with the name map for each location ──────────────────────────────────
+fig_tertile_kenya <- plot_tertile_boxplots(kenya_tertiles, "Kenya", kenya_name_map)
+fig_tertile_kenya
+
+fig_tertile_bangl <- plot_tertile_boxplots(bangl_tertiles, "Bangladesh", bangl_name_map)
+fig_tertile_bangl
+
+fig_tertile_cambo <- plot_tertile_boxplots(cam_tertiles, "Cambodia", cam_name_map)
+fig_tertile_cambo
+
+# ── Combine all three ──────────────────────────────────────────────────────────
+library(patchwork)
+fig_tertile_all <- fig_tertile_bangl + fig_tertile_kenya + fig_tertile_cambo +
+  plot_layout(ncol = 1, guides = "collect") &
+  theme(legend.position = "bottom")
+
+fig_tertile_all
+
+
+################################### try to create smooth multipathogen surfaces: 
+
+library(spaMM)
+library(sf)
+library(raster)
+library(viridis)
+
+# ── Helper function: fit Matern smooth surface and mask to admin units with data ──
+
+fit_smooth_rao_surface <- function(rao_data, admin_sf, admin_id_col, 
+                                   grid_n = 100, buffer_km = 10, utm_zone) {
+  
+  # Prepare data: needs lat, lon, rao
+  dat <- rao_data %>%
+    rename(lat = lat, lon = long) %>%
+    dplyr::select(lat, lon, rao) %>%
+    drop_na()
+  
+  # Identify which admin units actually contain at least one observed point
+  pts_sf <- dat %>%
+    st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+  
+  admin_with_data <- st_join(admin_sf, pts_sf, join = st_intersects) %>%
+    filter(!is.na(rao)) %>%
+    pull(!!sym(admin_id_col)) %>%
+    unique()
+  
+  admin_sf_masked <- admin_sf %>%
+    filter(!!sym(admin_id_col) %in% admin_with_data)
+  
+  # Build prediction grid over only the admin units containing data
+  box_grid <- st_make_grid(admin_sf_masked, n = c(grid_n, grid_n), what = "centers")
+  
+  # Transform points to UTM for the buffer/distance step
+  pts_utm <- pts_sf %>%
+    dplyr::select(geometry) %>%
+    st_transform(utm_zone)
+  
+  cl_buff <- st_buffer(pts_utm, dist = buffer_km) %>%
+    summarise(geometry = st_union(geometry)) %>%
+    st_cast("POLYGON") %>%
+    st_transform(crs = 4326)
+  
+  # Fit Matern spatial model
+  fit_rao <- spaMM::fitme(rao ~ lat + lon + Matern(1 | lat + lon),
+                          data = dat,
+                          family = gaussian(link = "identity"))
+  
+  # Predict over grid
+  preds_rao <- get_grid_preds(input_grid = box_grid, spamm_model_fit = fit_rao)
+  preds_coords <- st_coordinates(preds_rao)
+  
+  
+  preds_raster <- points_to_raster(
+    x = preds_coords[, 1],
+   y = preds_coords[, 2],
+    z = preds_rao$pred,
+    mask1 = admin_sf_masked,
+    mask2 = cl_buff,
+    crop1 = admin_sf_masked
+  )
+  
+  preds_tibble <- raster_to_tibble(preds_raster)
+  
+  list(surface = preds_tibble, admin_masked = admin_sf_masked, fit = fit_rao)
+}
+
+# ── KENYA ──────────────────────────────────────────────────────────────────────
+kenya_smooth <- fit_smooth_rao_surface(
+  rao_data    = rao_by_cluster %>% filter(location == "Kenya"),
+  admin_sf    = ken_admin3,
+  admin_id_col = "NAME_3",   # adjust to your actual admin3 ID column name
+  utm_zone    = "+proj=utm +zone=37 +datum=WGS84 +units=km"  # Kenya UTM zone
+)
+
+head(ken_admin3)
+
+kenya_map_rao_smooth <- ggplot() +
+  geom_sf(data = ken_admin3,
+          fill  = alpha("seagreen", 0.06),
+          color = alpha("black", 0.55),
+          lwd   = 0.35) +
+  geom_tile(data = kenya_smooth$surface %>% filter(!is.na(value)),
+            aes(x = x, y = y, fill = value), na.rm = TRUE, , alpha = .9) +
+  geom_sf(data = kenya_smooth$admin_masked,
+          fill = NA, color = alpha("black", 0.55), lwd = 0.35, inherit.aes = FALSE) +
+  scale_fill_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  coord_sf(crs = 4326) +
+  xlim(c(xmin_k, xmax_k)) + ylim(c(ymin_k, ymax_k)) +
+  ggtitle("Kenya") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(size = 20),
+    plot.subtitle = element_text(size = 20),
+    plot.tag      = element_text(face = "bold", size = 20),
+    legend.text   = element_text(size = 18),
+    legend.title  = element_text(size = 20),
+    legend.position = "none",
+    axis.title    = element_blank(),
+    axis.text     = element_blank(),
+    axis.ticks    = element_blank()
+  )
+kenya_map_rao_smooth
+
+
+# ── BANGLADESH ─────────────────────────────────────────────────────────────────
+
+
+library(igraph)
+
+fit_smooth_rao_surface <- function(rao_data, admin_sf, admin_id_col, 
+                                   grid_n = 100, buffer_km = 25, utm_zone) {
+  
+  dat <- rao_data %>%
+    rename(lat = lat, lon = long) %>%
+    dplyr::select(lat, lon, rao) %>%
+    drop_na()
+  
+  pts_sf <- dat %>%
+    st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+  
+  admin_with_data <- st_join(admin_sf, pts_sf, join = st_intersects) %>%
+    filter(!is.na(rao)) %>%
+    pull(!!sym(admin_id_col)) %>%
+    unique()
+  
+  admin_sf_masked <- admin_sf %>%
+    filter(!!sym(admin_id_col) %in% admin_with_data)
+  
+  # ── NEW: keep only the largest contiguous connected component ───────────────
+  admin_adj <- st_intersects(admin_sf_masked, admin_sf_masked)
+  adj_matrix <- as.matrix(as(admin_adj, "matrix"))
+  g <- graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
+  components <- components(g)
+  largest_component_id <- which.max(table(components$membership))
+  admin_sf_masked <- admin_sf_masked[components$membership == largest_component_id, ]
+  # ──────────────────────────────────────────────────────────────────────────────
+  
+  box_grid <- st_make_grid(admin_sf_masked, n = c(grid_n, grid_n), what = "centers")
+  
+  pts_utm <- pts_sf %>%
+    dplyr::select(geometry) %>%
+    st_transform(utm_zone)
+  
+  cl_buff <- st_buffer(pts_utm, dist = buffer_km) %>%
+    summarise(geometry = st_union(geometry)) %>%
+    st_cast("POLYGON") %>%
+    st_transform(crs = 4326)
+  
+  fit_rao <- spaMM::fitme(rao ~ lat + lon + Matern(1 | lat + lon),
+                          data = dat, family = gaussian(link = "identity"))
+  
+  preds_rao <- get_grid_preds(input_grid = box_grid, spamm_model_fit = fit_rao)
+  preds_coords <- st_coordinates(preds_rao)
+  
+  preds_raster <- points_to_raster(
+    x = preds_coords[, 1], y = preds_coords[, 2], z = preds_rao$pred,
+    mask1 = admin_sf_masked, mask2 = admin_sf_masked, crop1 = admin_sf_masked
+  )
+  
+  preds_tibble <- raster_to_tibble(preds_raster)
+  
+  list(surface = preds_tibble, admin_masked = admin_sf_masked, fit = fit_rao)
+}
+
+
+
+bangl_smooth <- fit_smooth_rao_surface(
+  rao_data    = rao_by_cluster %>% filter(location == "Bangladesh"),
+  admin_sf    = bgd_admin3,
+  admin_id_col = "ADM3_EN",   # matches your earlier HDX column naming
+  utm_zone    = "+proj=utm +zone=46 +datum=WGS84 +units=km")
+
+bangl_map_rao_smooth <- ggplot() +
+ geom_sf(data = bgd_admin3,
+         fill  = alpha("seagreen", 0.06),
+         color = alpha("black", 0.55),
+        lwd   = 0.35) +
+  geom_tile(data = bangl_smooth$surface %>% filter(!is.na(value)),
+            aes(x = x, y = y, fill = value), na.rm = TRUE, alpha = .90) +
+  geom_sf(data = bangl_smooth$admin_masked,
+          fill = NA, color = alpha("black", 0.55), lwd = 0.35, inherit.aes = FALSE) +
+  scale_fill_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  coord_sf(crs = 4326) +
+  xlim(c(89.9, 90.8)) + ylim(c(23.9, 25.0)) +
+  ggtitle("Bangladesh") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(size = 20),
+    plot.subtitle = element_text(size = 20),
+    plot.tag      = element_text(face = "bold", size = 20),
+    legend.text   = element_text(size = 18),
+    legend.title  = element_text(size = 20),
+    legend.position = "none",
+    axis.title    = element_blank(),
+    axis.text     = element_blank(),
+    axis.ticks    = element_blank())
+bangl_map_rao_smooth
+
+
+# ── CAMBODIA ───────────────────────────────────────────────────────────────────
+cam_smooth <- fit_smooth_rao_surface(
+  rao_data    = rao_by_cluster %>% filter(location == "Cambodia"),
+  admin_sf    = khm_admin2_sf,
+  admin_id_col = "NAME_2",   # adjust to your actual GADM admin2 column
+  utm_zone    = "+proj=utm +zone=48 +datum=WGS84 +units=km"
+)
+
+
+head(khm_admin2_sf)
+
+cam_map_rao_smooth <- ggplot() +
+  geom_sf(data = khm_admin2_sf,
+          fill  = alpha("seagreen", 0.06),
+          color = alpha("black", 0.55),
+          lwd   = 0.35) +
+  geom_tile(data = cam_smooth$surface %>% filter(!is.na(value)),
+            aes(x = x, y = y, fill = value), na.rm = TRUE, alpha = .9) +
+  geom_sf(data = cam_smooth$admin_masked,
+          fill = NA, color = alpha("black", 0.55), lwd = 0.35, inherit.aes = FALSE) +
+  scale_fill_viridis_c(option = "magma", name = "Rao's quadratic\nindex") +
+  coord_sf(crs = 4326) +
+  ggtitle("Cambodia") +
+  annotation_scale(location = "bl", width_hint = 0.3) +
+  annotation_north_arrow(location = "tr", which_north = "true",
+                         style = north_arrow_fancy_orienteering()) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(size = 20),
+    plot.subtitle = element_text(size = 20),
+    plot.tag      = element_text(face = "bold", size = 20),
+    legend.text   = element_text(size = 14),
+    legend.title  = element_text(size = 14),
+    legend.position = "right",
+    axis.title    = element_blank(),
+    axis.text     = element_blank(),
+    axis.ticks    = element_blank()
+  )
+cam_map_rao_smooth
+
+# ── Combine, same as before ────────────────────────────────────────────────────
+two <- plot_grid(bangl_map_rao_smooth, kenya_map_rao_smooth, nrow = 1)
+two
+
+
+maps_rao_smooth <- plot_grid(two, cam_map_rao_smooth)
+
+fig2a_shifted <- ggdraw() +
+  draw_plot(maps_rao_smooth, x = 0.05, y = 0, width = 0.95, height = 1)
+fig2a_shifted
+
+fig2a <- fig2a_shifted +
+  labs(tag = "A") +
+  theme(plot.tag          = element_text(size = 20, face = "bold"),
+        plot.tag.position = c(0, 0.95))  # default top is (0, 1); lower y shifts down
+fig2a
+
+# 1100 by 1000
+plot_grid(fig2a, fig2b, ncol= 1, rel_heights = c(.5, .7))
