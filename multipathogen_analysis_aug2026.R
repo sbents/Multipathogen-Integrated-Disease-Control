@@ -1512,369 +1512,97 @@ fig1b_final <- ggdraw(fig1b_no_label) +
 fig1b_final
 
 
-### try some light figure reformatting it was stupid 
+##################################################################
+# One more go at Fig3a
 
+strategy_colors <- c("Rao's quadratic index" = "#440154FF", 
+                     "Vaccine only" = "cornflowerblue", 
+                     "Wealth" = "orangered")
 
-# ------------------------------------------------------------
-# Clean pathogen names
-# ------------------------------------------------------------
+strategy_linetypes <- c("Rao's quadratic index" = "solid", 
+                        "Vaccine only" = "solid", 
+                        "Wealth" = "dashed")
 
-cumulative_pathogen_curves_clean <- cumulative_pathogen_curves_v2 %>%
-  mutate(
-    pathogen = replace(pathogen, pathogen == "Trichuris", "T. trichiura"),
-    pathogen = replace(pathogen, pathogen == "Plasmodium falciparum", "P. falciparum"),
-    pathogen = replace(pathogen, pathogen == "Plasmodium vivax", "P. vivax"),
-    pathogen = replace(pathogen, pathogen == "Ascaris", "A. lumbricoides"),
-    pathogen = replace(pathogen, pathogen == "Strongyloides stercoralis", "S. stercoralis"))
+pathogen_order <- list(
+  Bangladesh = c("Measles", "Rubella", "A. lumbricoides", "Hookworm", "T. trichiura"),
+  Kenya = c("Measles", "P. malariae", "Schistosomiasis"),
+  Cambodia = c("Tetanus", "P. falciparum", "P. vivax",
+               "Lymphatic filariasis", "S. stercoralis")
+)
 
-
-# ------------------------------------------------------------
-# Function to make ONE pathogen panel
-# ------------------------------------------------------------
-
-make_pathogen_panel <- function(loc, pathogen_name, show_x = FALSE,
-                                show_y = TRUE, show_legend = FALSE) {
-  
-  dat <- cumulative_pathogen_curves_clean %>%
-    filter(
-      location == loc,
-      pathogen == pathogen_name
-    )
-  
-  p <- ggplot(dat) +
-    geom_line(
-      aes(
-        x = frac_clusters,
-        y = cum_fraction,
-        linetype = strategy,
-        color = strategy
-      ),
-      lwd = 1.15
-    ) +
-    geom_hline(
-      yintercept = 0.80,
-      col = "gray70",
-      lty = "dashed"
-    ) +
-    scale_color_manual(
-      values = strategy_colors,
-      name = "Strategy"
-    ) +
-    scale_linetype_manual(
-      values = strategy_linetypes,
-      name = "Strategy"
-    ) +
+# Plot all locations with same formatting
+plot_location_full <- function(loc, nc) {
+  cumulative_pathogen_curves_v2 %>%
+    mutate(pathogen = replace(pathogen, pathogen == "Trichuris", "T. trichiura"),
+           pathogen = replace(pathogen, pathogen == "Plasmodium falciparum", "P. falciparum"),
+           pathogen = replace(pathogen, pathogen == "Plasmodium vivax", "P. vivax"),
+           pathogen = replace(pathogen, pathogen == "Ascaris", "A. lumbricoides"), 
+           pathogen = replace(pathogen, pathogen == "Strongyloides stercoralis", "S. stercoralis"),
+           pathogen = factor(pathogen, levels = pathogen_order[[loc]])) %>%
+    filter(location == loc) %>%
+    ggplot() +
+    geom_line(aes(x = frac_clusters, y = cum_fraction,
+                  color = strategy, linetype = strategy), lwd = 1.25, alpha = .85) +
+    facet_wrap(vars(pathogen), ncol = nc) +
+    geom_hline(yintercept = .80, col = "gray70", lty = "dashed") +
+    scale_color_manual(values = strategy_colors, name = "Strategy") +
+    scale_linetype_manual(values = strategy_linetypes, name = "Strategy") +
     theme_bw(base_size = 11) +
-    theme(
-      strip.text = element_text(
-        size = 9.5,
-        colour = "black"
-      ),
-      strip.background = element_rect(
-        fill = "white",
-        colour = "black"
-      ),
-      axis.text.y = element_text(
-        size = 12,
-        colour = if (show_y) "black" else "transparent"
-      ),
-      axis.ticks.y = element_line(
-        colour = if (show_y) "black" else "transparent"
-      ),
-      axis.title.y = element_blank(),
-      plot.margin = margin(
-        t = 2,
-        r = 2,
-        b = if (show_x) 35 else 2,
-        l = 2
-      )
-    )
-  
-  # Add pathogen name as a strip-like title
-  p <- p +
-    ggtitle(pathogen_name) +
-    theme(
-      plot.title = element_text(
-        size = 9.5,
-        colour = "black",
-        face = "plain",
-        hjust = 0.5,
-        margin = margin(b = 6)
-      )
-    )
-  
-  # X-axis settings
-  if (show_x) {
-    p <- p +
-      xlab("Spatial clusters") +
-      theme(
-        axis.text.x = element_text(
-          angle = 35,
-          hjust = 1,
-          size = 10
-        ),
-        axis.title.x = element_text(size = 14, margin = margin(t = 8))
-      )
-  } else {
-    p <- p +
-      theme(
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank()
-      )
-  }
-  
-  # Legend settings
-  if (show_legend) {
-    p <- p +
-      guides(
-        color = guide_legend(nrow = 3, byrow = TRUE),
-        linetype = guide_legend(nrow = 3, byrow = TRUE)
-      ) +
-      theme(
-        legend.position = "bottom",
-        legend.text = element_text(size = 8.4),
-        legend.title = element_text(size = 9)
-      )
-  } else {
-    p <- p +
-      theme(
-        legend.position = "none"
-      )
-  }
-  
-  return(p)
+    xlab("Spatial clusters") +
+    ggtitle(loc) +
+    theme(strip.text = element_text(size = 13, colour = "black"),
+          strip.background = element_rect(fill = "white", colour = "black"),
+          axis.text.x = element_text(angle = 35, hjust = 1, size = 10),
+          axis.text.y = element_text(size = 12),
+          axis.title.x = element_text(size = 14),
+          axis.title.y = element_blank(),
+          legend.position = "none",
+          plot.title = element_text(size = 14))
 }
 
+p_bangladesh <- plot_location_full("Bangladesh", nc = 3)
+p_kenya <- plot_location_full("Kenya", nc = 3)
+p_cambodia <- plot_location_full("Cambodia", nc = 3)
 
-# ------------------------------------------------------------
-# Get pathogen order for each location
-# ------------------------------------------------------------
+# Match panel margins to Fig 2b
+p_bangladesh <- p_bangladesh + theme(plot.margin = margin(t = 5, r = 5, b = 5, l = 15))
+p_kenya <- p_kenya + theme(plot.margin = margin(t = 5, r = 5, b = 5, l = 15))
+p_cambodia <- p_cambodia + theme(plot.margin = margin(t = 5, r = 5, b = 5, l = 5))
 
-bangladesh_pathogens <- pathogen_order[["Bangladesh"]]
+# Extract shared legend
+legend_source <- cumulative_pathogen_curves_v2 %>%
+  filter(location == "Cambodia") %>%
+  ggplot() +
+  geom_line(aes(x = frac_clusters, y = cum_fraction,
+                color = strategy, linetype = strategy), lwd = 1.25) +
+  scale_color_manual(values = strategy_colors, name = "Strategy") +
+  scale_linetype_manual(values = strategy_linetypes, name = "Strategy") +
+  theme_bw(base_size = 11) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 16))
 
-kenya_pathogens <- pathogen_order[["Kenya"]]
+shared_legend <- ggpubr::get_legend(legend_source)
+legend_plot <- ggpubr::as_ggplot(shared_legend)
 
-cambodia_pathogens <- pathogen_order[["Cambodia"]]
+layout <- "
+AC
+AC
+BD
+"
 
-
-# ------------------------------------------------------------
-# Create individual panels
-# ------------------------------------------------------------
-
-# Bangladesh: 5 panels (x-axis on the last panel only)
-bangladesh_panels <- lapply(
-  seq_along(bangladesh_pathogens),
-  function(i) {
-    make_pathogen_panel(
-      loc = "Bangladesh",
-      pathogen_name = bangladesh_pathogens[i],
-      show_x = (i == length(bangladesh_pathogens)),
-      show_y = TRUE,
-      show_legend = FALSE
-    )
-  }
-)
-
-
-# Kenya: 3 panels (x-axis on the last panel only)
-kenya_panels <- lapply(
-  seq_along(kenya_pathogens),
-  function(i) {
-    make_pathogen_panel(
-      loc = "Kenya",
-      pathogen_name = kenya_pathogens[i],
-      show_x = (i == length(kenya_pathogens)),
-      show_y = FALSE,
-      show_legend = FALSE
-    )
-  }
-)
-
-
-# Cambodia: 5 panels (x-axis on the last panel only)
-cambodia_panels <- lapply(
-  seq_along(cambodia_pathogens),
-  function(i) {
-    make_pathogen_panel(
-      loc = "Cambodia",
-      pathogen_name = cambodia_pathogens[i],
-      show_x = (i == length(cambodia_pathogens)),
-      show_y = FALSE,
-      show_legend = FALSE
-    )
-  }
-)
-
-
-# ------------------------------------------------------------
-# Create blank panels for the two missing Kenya pathogens
-# ------------------------------------------------------------
-
-blank_panel <- ggplot() +
-  theme_void() +
-  theme(
-    plot.background = element_rect(
-      fill = "white",
-      colour = NA
-    ),
-    panel.background = element_rect(
-      fill = "white",
-      colour = NA
-    ),
-    plot.margin = margin(
-      t = 2,
-      r = 2,
-      b = 2,
-      l = 2
-    )
-  )
-
-
-# ------------------------------------------------------------
-# Extract a single shared legend (built once, reused everywhere)
-# ------------------------------------------------------------
-
-legend_source <- make_pathogen_panel(
-  loc = "Kenya",
-  pathogen_name = kenya_pathogens[1],
-  show_x = FALSE,
-  show_legend = TRUE
-) +
-  theme(
-    legend.box.margin = margin(0, 0, 0, 0),
-    legend.background = element_rect(fill = "white", colour = NA)
-  )
-
-shared_legend <- get_legend(legend_source)
-
-
-# Add the shared legend to the first blank Kenya slot, keep one blank spacer
-kenya_panels <- c(
-  kenya_panels,
-  list(ggdraw(shared_legend), blank_panel)
-)
-
-
-# ------------------------------------------------------------
-# Location column headers (separate row, sits above ALL panels
-# in the column -- including panel 1's own pathogen title)
-# ------------------------------------------------------------
-
-make_location_header <- function(label) {
-  ggdraw() +
-    draw_label(
-      label,
-      fontface = "bold",
-      size = 16,
-      hjust = 0.5
-    )
-}
-
-bangladesh_header <- make_location_header("Bangladesh")
-kenya_header <- make_location_header("Kenya")
-cambodia_header <- make_location_header("Cambodia")
-
-
-# ------------------------------------------------------------
-# Combine each location into a vertical column
-# (header row on top, panel stack below)
-# ------------------------------------------------------------
-
-bangladesh_col <- plot_grid(
-  bangladesh_header,
-  plot_grid(
-    plotlist = bangladesh_panels,
-    ncol = 1,
-    align = "v",
-    axis = "lr",
-    rel_heights = c(rep(1, length(bangladesh_panels) - 1), 1.65)
-  ),
-  ncol = 1,
-  rel_heights = c(0.07, 1)
-)
-bangladesh_col
-
-kenya_col <- plot_grid(
-  kenya_header,
-  plot_grid(
-    plotlist = kenya_panels,
-    ncol = 1,
-    align = "v",
-    axis = "lr",
-    rel_heights = c(rep(1, length(kenya_pathogens) - 1), 1.65, rep(1, 2))
-  ),
-  ncol = 1,
-  rel_heights = c(0.07, 1)
-)
-
-
-cambodia_col <- plot_grid(
-  cambodia_header,
-  plot_grid(
-    plotlist = cambodia_panels,
-    ncol = 1,
-    align = "v",
-    axis = "lr",
-    rel_heights = c(rep(1, length(cambodia_panels) - 1), 1.65)
-  ),
-  ncol = 1,
-  rel_heights = c(0.07, 1)
-)
-
-
-#------------------------------------------------------------
-  # Combine the three columns
-  # ------------------------------------------------------------
-
-fig1b_columns <- plot_grid(
-  bangladesh_col,
-  kenya_col,
-  cambodia_col,
-  ncol = 3,
-  align = "h",
-  rel_widths = c(1, 1, 1)
-)
-
-
-# ------------------------------------------------------------
-# Add a dedicated y-axis title column (instead of an absolutely
-# positioned label, which drifts on top of the plots whenever
-# the layout changes)
-# ------------------------------------------------------------
-
-y_axis_title <- ggdraw() +
-  draw_label(
-    "Cumulative disease targeted",
-    angle = 90,
-    size = 15,
-    fontface = "plain"
-  )
-
-fig1b_build <- plot_grid(
-  y_axis_title,
-  fig1b_columns,
-  ncol = 2,
-  rel_widths = c(0.04, 1)
-)
-
-
-# ------------------------------------------------------------
-# Add panel label
-# ------------------------------------------------------------
+fig1b_build <- p_bangladesh + p_kenya + p_cambodia + legend_plot +
+  plot_layout(design = layout, heights = c(2, 2, 2))
 
 fig1b_final <- ggdraw(fig1b_build) +
-  draw_label(
-    "A",
-    x = 0.015,
-    y = 0.99,
-    size = 20,
-    fontface = "bold"
-  )
+  draw_label("Cumulative disease targeted", x = 0.01, y = 0.5,
+             angle = 90, size = 15, fontface = "plain")
 
+fig1b <- fig1b_final +
+  labs(tag = "A") +
+  theme(plot.tag = element_text(size = 20, face = "bold"))
 
-# Display
-fig1b_final
+fig1b
 
 # ── Step 5: Update fig1c (clusters_80) with MPI as red triangle ──────────────
 
@@ -3135,6 +2863,7 @@ boot_summary_ordered <- boot_summary %>%
 boot_build <- ggplot(boot_summary_ordered %>%
                        mutate(location = factor(location, levels = c("Bangladesh", "Kenya", "Cambodia"))),
                      aes(x = pathogen_ordered, y = median_80, color = strategy)) +
+  geom_hline(yintercept = 0.80, linetype = "dashed", color = "gray") +
   geom_errorbar(aes(ymin = lower_80, ymax = upper_80),
                 width = 0.25, lwd = 0.9,
                 position = position_dodge(width = 0.6)) +
@@ -3146,7 +2875,6 @@ boot_build <- ggplot(boot_summary_ordered %>%
                "Vaccine only"          = "cornflowerblue",
                "Wealth"                = "orangered"),
     name = "Strategy") +
-  geom_hline(yintercept = 0.80, linetype = "dashed", color = "gray") +
   labs(x = "Pathogen", y = "Proportion of clusters to reach 80% coverage") +
   theme_bw(base_size = 11) +
   theme(axis.text.x      = element_text(angle = 35, hjust = 1, size = 12),
@@ -3154,7 +2882,7 @@ boot_build <- ggplot(boot_summary_ordered %>%
         axis.title       = element_text(size = 15),
         legend.text      = element_text(size = 13),
         legend.title     = element_text(size = 14),
-        legend.position  = "bottom",
+        legend.position  = "right",
         panel.spacing.x  = unit(1.15, "cm"),
         strip.background = element_rect(fill = "white", colour = "black"),
         strip.text       = element_text(size = 16))
@@ -3163,7 +2891,7 @@ boot_build
 fig3b_label_man = boot_build + 
   labs(tag = "B")  +
   theme(plot.tag          = element_text(size = 20, face = "bold"))
-
+fig3b_label_man
 ### Remake figure 3
 
 fig3a_no_label_man <- fig1b_build +
@@ -3176,14 +2904,14 @@ fig3a_no_label_man
 
 fig3a_final_man <- ggdraw(fig3a_no_label_man) +
   draw_label("Cumulative disease targeted",
-             x = 0.05, y = 0.5, angle = 90, size = 15, fontface = "plain")
+             x = 0.01, y = 0.5, angle = 90, size = 15, fontface = "plain")
 fig3a_final_man
 
 # FINAL FIGURE 3 
-plot_grid(fig3a_final_man, fig3b_label_man, ncol = 2, rel_widths = c(.33, .4), labels = c("A", ""), 
+plot_grid(fig3a_final_man, fig3b_label_man, ncol = 1, rel_heights = c(.5, .4), labels = c("A", ""), 
           label_size = 20)
 
-
+# 1200 x 1100
 
 # Display
 #plot_grid(fig1b_final, fig3b_label_man, ncol = 2, rel_widths = c(.33, .4))
