@@ -46,6 +46,7 @@ antigen_path = c("T. solium", "Cholera", "E. histolytica" , "Cryptosporidium", "
 # remove pathogens with no signal- schisto control and covid  
 # define seropositivity based on cutoff 
 # only visit 3 data 
+print(unique(luminex_bangl$pathogen))
 luminex_bangl <- read.csv(file = here("data/bangl/luminex/final", 
                                       "washb_bangl_luminex_igg_seropos_2025-09-21.csv")) %>%
   left_join(public_id_cluster, by = c("clusterid")) %>%
@@ -180,12 +181,14 @@ antigen_path = c("T. solium", "Cholera", "E. histolytica" , "Cryptosporidium", "
                  "Schistosomiasis", "P. ovale",  "Norovirus",  "P. malariae" , "Onchocerciasis" , "Dengue",         
                  "P. vivax" , "Campylobacter", "Zika", "Salmonella" , "Trachoma" ,"Giardia"  ,      
                  "Chikungunya" ,    "LT-ETEC" ,   "Shigella", "Strongyloides" )
+
+print(unique(luminex_kenya$pathogen))
 luminex_kenya = read.csv(file = here("data/kenya/luminex/final", 
                                      "washb_kenya_luminex_igg_seropos_2025-09-21.csv")) %>%
   mutate(dataid = str_extract(childid, "(?<=-)\\d{5}(?=-)")) %>%
   left_join(treatment_assignment, by = "clusterid") %>%
   filter(visit == 3) %>%
-  filter(!pathogen %in% c("COVID19", "Schistosoma GST", "Trachoma")) %>%
+  filter(!pathogen %in% c("COVID19", "Schistosoma GST")) %>%
   filter(!antigen %in% c("pfmsp1", "glurp", "lsa")) %>% # longer lasting malaria 
   mutate(seropos = ifelse(mfi > mficut & pathogen %in% antigen_path , 1, 
                           ifelse(mfi < mficut & pathogen %in% antigen_vax, 1, 0))) %>%
@@ -281,7 +284,7 @@ print(unique(kenya_targeting_cluster$pathogen))
 # plot histogram of distribution of intervention need 
 ken_supp_prev = ggplot(data = kenya_targeting_cluster %>%
                          mutate(pathogen = factor(pathogen, levels = c("Measles", "Rubella","P. falciparum", "P. malariae", "P. ovale",
-                                                                       "A. lumbricoides",  "Schistosomiasis",
+                                                                       "A. lumbricoides",  "Schistosomiasis", "Trachoma",
                                                                        "T. solium" )))) +
   geom_histogram(aes(x = fraction), fill = "lightskyblue3") +
   facet_wrap(vars(pathogen), scales = "free") + theme_minimal() +
@@ -770,6 +773,7 @@ head(best_combos)
 
 kenya_select = results_combo %>%
   filter(combo == "Measles + P. falciparum + P. malariae + P. ovale + Schistosomiasis")%>% 
+ # filter(combo == "Measles + P. falciparum + P. malariae + P. ovale + Schistosomiasis")%>% 
   dplyr::select(location, combo, n_clusters, prop_clusters, moran_i)
 head(kenya_select)
 
@@ -1561,6 +1565,59 @@ fig1b_final <- ggdraw(fig1b_no_label) +
 fig1b_final
 
 
+#################################################################
+# ind path gains 
+
+# Clusters needed to reach 80% of burden, per location x pathogen x strategy
+clusters_needed_80 = cumulative_pathogen_curves_v2 %>%
+  group_by(location, pathogen, strategy) %>%
+  summarise(
+    n_total_clusters = n(),
+    n_clusters_80    = which(cum_fraction >= 0.80)[1],   # rank of first cluster crossing 80%
+    prop_clusters_80 = n_clusters_80 / n_total_clusters,
+    .groups = "drop")
+
+clusters_needed_80 = cumulative_pathogen_curves_v2 %>%
+  group_by(location, pathogen, strategy) %>%
+  summarise(n_clusters_80 = which(cum_fraction >= 0.80)[1], .groups = "drop") %>%
+  left_join(n_clusters_loc, by = "location") %>%
+  mutate(prop_clusters_80 = n_clusters_80 / n_clusters)
+rao_vs_vax = clusters_needed_80 %>%
+  filter(strategy %in% c("Rao's quadratic index", "Vaccine only")) %>%
+  dplyr::select(location, pathogen, strategy, n_clusters, n_clusters_80) %>%
+  pivot_wider(names_from = strategy, values_from = n_clusters_80) %>%
+  rename(n_rao = `Rao's quadratic index`, n_vax = `Vaccine only`) %>%
+  mutate(
+    clusters_saved = n_vax - n_rao,
+    pct_fewer_rao  = 100 * (n_vax - n_rao) / n_vax
+  ) %>%
+  arrange(location, desc(pct_fewer_rao))
+
+print(rao_vs_vax, n = Inf)
+
+# Rao vs vaccine-only efficiency gain
+rao_vs_vax = clusters_needed_80 %>%
+  filter(strategy %in% c("Rao's quadratic index", "Vaccine only")) %>%
+  dplyr::select(location, pathogen, strategy, n_total_clusters, n_clusters_80) %>%
+  pivot_wider(names_from = strategy, values_from = n_clusters_80) %>%
+  rename(n_rao = `Rao's quadratic index`, n_vax = `Vaccine only`) %>%
+  mutate(
+    clusters_saved   = n_vax - n_rao,
+    pct_fewer_rao    = 100 * (n_vax - n_rao) / n_vax,          # % reduction relative to vaccine-only
+    pct_diff_sym     = 100 * abs(n_vax - n_rao) / ((n_vax + n_rao) / 2)  # symmetric % difference, if you prefer
+  ) %>%
+  arrange(location, desc(pct_fewer_rao))
+
+print(rao_vs_vax, n = Inf)
+
+# Optional: one summary number per country (median across non-vaccine pathogens)
+rao_vs_vax %>%
+  filter(!pathogen %in% c("Measles", "Rubella", "Tetanus")) %>%
+  group_by(location) %>%
+  summarise(median_pct_fewer = median(pct_fewer_rao, na.rm = TRUE),
+            range = paste0(round(min(pct_fewer_rao, na.rm = TRUE)), "–",
+                           round(max(pct_fewer_rao, na.rm = TRUE)), "%"))
+
 ##################################################################
 # One more go at Fig3a
 
@@ -1891,6 +1948,8 @@ st_crs(cam_admin1) <- 4326
 # Fix invalid geometries
 cam_admin1 <- st_make_valid(cam_admin1)
 all(st_is_valid(cam_admin1))
+
+sapply(list(bgd = bgd_admin3, ken = ken_admin3, cam = cam_admin1), nrow)
 
 
 # quick plot
@@ -4237,7 +4296,7 @@ rel_summary <- boot_gains %>%
             p_rao_better    = mean(rel_extra > 0),   # share of replicates where Rao needs fewer clusters
             p_rao_not_worse = mean(rel_extra >= 0),
             .groups = "drop") %>%
-  mutate(across(c(boot_median, ci_low, ci_high), ~ round(.x, 1)),
+  mutate(across(c(boot_median, ci_low, ci_high), ~ round(.x, 6)),
          comparison = recode(comparison,
                              rel_vs_wealth  = "Wealth vs. Rao",
                              rel_vs_vaccine = "Vaccine only vs. Rao"))
