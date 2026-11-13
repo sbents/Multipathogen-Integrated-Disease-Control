@@ -22,8 +22,10 @@ Installation Guide
 R Studio can be installed at this link: https://posit.co/download/rstudio-desktop/. Typical installation is under ten minutes using an updated operating system.
 
 ______________________________________________________________________________________________________________________________________________________
+Folders:
 
-Demo
+data: publicly available data used in the analyses 
+analysis: code to run all analyses and produce all figures in the main text and supplementary
 
 
 
